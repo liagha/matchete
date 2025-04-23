@@ -1,7 +1,9 @@
+use core::fmt::Debug;
 use crate::{SimilarityMetric, MatchType};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 /// Strategy for combining multiple metrics
+#[derive(Debug)]
 pub enum CompositeStrategy {
     /// Use the maximum score from any metric
     Maximum,
@@ -14,6 +16,7 @@ pub enum CompositeStrategy {
 }
 
 /// Composite metric that combines multiple metrics using a strategy
+#[derive(Debug)]
 pub struct CompositeSimilarity<Q, C> {
     id: String,
     metrics: Vec<Box<dyn SimilarityMetric<Q, C>>>,
@@ -42,7 +45,7 @@ impl<Q, C> CompositeSimilarity<Q, C> {
     }
 }
 
-impl<Q, C> SimilarityMetric<Q, C> for CompositeSimilarity<Q, C> {
+impl<Q: Debug, C: Debug> SimilarityMetric<Q, C> for CompositeSimilarity<Q, C> {
     fn calculate(&self, query: &Q, candidate: &C) -> f64 {
         if self.metrics.is_empty() {
             return 0.0;
@@ -90,10 +93,6 @@ impl<Q, C> SimilarityMetric<Q, C> for CompositeSimilarity<Q, C> {
         }
     }
 
-    fn id(&self) -> &str {
-        &self.id
-    }
-
     fn match_type(&self, query: &Q, candidate: &C) -> Option<MatchType> {
         // First check if any metric provides an exact match
         for metric in &self.metrics {
@@ -105,7 +104,8 @@ impl<Q, C> SimilarityMetric<Q, C> for CompositeSimilarity<Q, C> {
         // Otherwise calculate composite score
         let score = self.calculate(query, candidate);
         if score > 0.0 {
-            Some(MatchType::Similar(self.id().to_string()))
+            let id = format!("{:?}", self);
+            Some(MatchType::Similar(id))
         } else {
             None
         }

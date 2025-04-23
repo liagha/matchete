@@ -2,6 +2,7 @@ use crate::SimilarityMetric;
 
 /// Soundex phonetic encoding for names with improved handling of edge cases
 /// and performance optimizations
+#[derive(Debug)]
 pub struct SoundexSimilarity {
     /// Maximum length to consider for calculating partial matches
     max_compare_length: usize,
@@ -142,9 +143,6 @@ impl SimilarityMetric<String, String> for SoundexSimilarity {
         self.partial_match_score(&query_soundex, &candidate_soundex)
     }
 
-    fn id(&self) -> &str {
-        "soundex"
-    }
 }
 
 // Add support for string references
@@ -154,9 +152,6 @@ impl SimilarityMetric<&str, String> for SoundexSimilarity {
         self.calculate(&query_str, candidate)
     }
 
-    fn id(&self) -> &str {
-        "soundex"
-    }
 }
 
 impl SimilarityMetric<String, &str> for SoundexSimilarity {
@@ -165,7 +160,4 @@ impl SimilarityMetric<String, &str> for SoundexSimilarity {
         self.calculate(query, &candidate_str)
     }
 
-    fn id(&self) -> &str {
-        "soundex"
-    }
 }

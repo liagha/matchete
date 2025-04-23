@@ -1,3 +1,5 @@
+#![allow(unused_variables, unused_mut)]
+
 use std::collections::HashMap;
 use core::marker::PhantomData;
 use core::fmt::Debug;
@@ -6,7 +8,7 @@ use crate::common::WeightedMetric;
 use crate::composite::{CompositeSimilarity, CompositeStrategy};
 
 /// Core matcher implementation that combines multiple similarity metrics
-pub struct Matcher<Q, C> {
+pub struct Matcher<Q: Debug, C: Debug> {
     metrics: Vec<WeightedMetric<Q, C>>,
     config: MatcherConfig,
     _phantom: PhantomData<(Q, C)>,
@@ -72,7 +74,8 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
         let mut scores = Vec::with_capacity(self.metrics.len());
 
         for weighted_metric in &self.metrics {
-            let id = weighted_metric.metric.id().to_string();
+            let id = format!("{:?}", weighted_metric.metric);
+
             let raw_score = weighted_metric.metric.calculate(query, candidate);
             let weight = weighted_metric.weight;
 
@@ -226,7 +229,7 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
 }
 
 /// Composite matcher that combines results from multiple matchers
-pub struct MultiMatcher<Q, C> {
+pub struct MultiMatcher<Q: Debug, C: Debug> {
     matchers: Vec<Box<Matcher<Q, C>>>,
     threshold: f64,
 }
@@ -313,7 +316,7 @@ impl<Q: Clone + Debug, C: Clone + Debug + PartialEq> MultiMatcher<Q, C> {
 }
 
 // In matcher.rs, enhance the MatcherBuilder
-pub struct MatcherBuilder<Q, C> {
+pub struct MatcherBuilder<Q: Debug, C: Debug> {
     matcher: Matcher<Q, C>,
     metric_groups: Vec<(String, Vec<WeightedMetric<Q, C>>)>,
     current_group: Option<String>,

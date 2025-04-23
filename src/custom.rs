@@ -1,10 +1,12 @@
+use core::fmt::Debug;
 use crate::SimilarityMetric;
 use std::marker::PhantomData;
 
 /// Closure-based similarity metric
-pub struct ClosureMetric<Q, C, F>
+#[derive(Debug)]
+pub struct ClosureMetric<Q: Debug, C: Debug, F: Debug>
 where
-    F: Fn(&Q, &C) -> f64,
+    F: Fn(&Q, &C) -> f64, Q: Debug, C: Debug, F: Debug,
 {
     id: String,
     calculate_fn: F,
@@ -13,7 +15,7 @@ where
 
 impl<Q, C, F> ClosureMetric<Q, C, F>
 where
-    F: Fn(&Q, &C) -> f64,
+    F: Fn(&Q, &C) -> f64, Q: Debug, C: Debug, F: Debug,
 {
     pub fn new<S: Into<String>>(id: S, calculate_fn: F) -> Self {
         Self {
@@ -26,13 +28,9 @@ where
 
 impl<Q, C, F> SimilarityMetric<Q, C> for ClosureMetric<Q, C, F>
 where
-    F: Fn(&Q, &C) -> f64,
+    F: Fn(&Q, &C) -> f64, Q: Debug, C: Debug, F: Debug,
 {
     fn calculate(&self, query: &Q, candidate: &C) -> f64 {
         (self.calculate_fn)(query, candidate)
-    }
-
-    fn id(&self) -> &str {
-        &self.id
     }
 }

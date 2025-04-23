@@ -50,6 +50,7 @@ impl MatcherPresets {
     /// Creates a matcher optimized for numeric proximity
     pub fn numeric_matcher() -> Matcher<f64, f64> {
         // We'd need to implement NumericSimilarity separately
+        #[derive(Debug)]
         struct NumericSimilarity {
             max_difference: f64,
         }
@@ -64,9 +65,6 @@ impl MatcherPresets {
                 }
             }
 
-            fn id(&self) -> &str {
-                "numeric_proximity"
-            }
         }
 
         MatcherBuilder::new()

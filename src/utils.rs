@@ -153,6 +153,7 @@ pub fn create_dvorak_layout() -> HashMap<char, Vec<char>> {
     layout
 }
 
+#[derive(Debug)]
 pub enum KeyboardLayoutType {
     Qwerty,
     Dvorak,

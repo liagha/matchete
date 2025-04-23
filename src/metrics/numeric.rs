@@ -1,5 +1,6 @@
 use crate::common::SimilarityMetric;
 
+#[derive(Debug)]
 pub struct NumericProximityMetric {
     pub normalization_factor: f64,
 }
@@ -27,11 +28,9 @@ where
         (-normalized_diff).exp()
     }
 
-    fn id(&self) -> &str {
-        "NumericProximity"
-    }
 }
 
+#[derive(Debug)]
 pub struct RangeProximityMetric {
     pub min_value: f64,
     pub max_value: f64,
@@ -70,11 +69,9 @@ where
         1.0 - (actual_distance / max_distance).min(1.0)
     }
 
-    fn id(&self) -> &str {
-        "RangeProximity"
-    }
 }
 
+#[derive(Debug)]
 pub struct PercentageProximityMetric;
 
 impl<T, U> SimilarityMetric<T, U> for PercentageProximityMetric
@@ -100,11 +97,9 @@ where
         smaller / larger
     }
 
-    fn id(&self) -> &str {
-        "PercentageProximity"
-    }
 }
 
+#[derive(Debug)]
 pub struct ExponentialDecayMetric {
     pub decay_factor: f64,
 }
@@ -131,11 +126,9 @@ where
         (-self.decay_factor * difference).exp()
     }
 
-    fn id(&self) -> &str {
-        "ExponentialDecay"
-    }
 }
 
+#[derive(Debug)]
 pub struct ThresholdProximityMetric {
     pub threshold: f64,
 }
@@ -166,7 +159,4 @@ where
         }
     }
 
-    fn id(&self) -> &str {
-        "ThresholdProximity"
-    }
 }

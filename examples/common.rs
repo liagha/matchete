@@ -6,6 +6,7 @@ use std::collections::HashSet;
 
 /// A simple Levenshtein-like string similarity metric (for demonstration).
 /// Computes a score based on the difference in string lengths.
+#[derive(Debug)]
 pub struct SimpleLevenshteinMetric;
 
 impl SimilarityMetric<String, String> for SimpleLevenshteinMetric {
@@ -18,14 +19,11 @@ impl SimilarityMetric<String, String> for SimpleLevenshteinMetric {
         let distance = (query.len() as i32 - candidate.len() as i32).abs() as f64;
         1.0 - (distance / max_len)
     }
-
-    fn id(&self) -> &str {
-        "simple_levenshtein"
-    }
 }
 
 /// Jaccard similarity metric for strings based on character sets.
 /// Computes the intersection over union of character sets.
+#[derive(Debug)]
 pub struct JaccardMetric;
 
 impl SimilarityMetric<String, String> for JaccardMetric {
@@ -40,14 +38,11 @@ impl SimilarityMetric<String, String> for JaccardMetric {
             intersection / union
         }
     }
-
-    fn id(&self) -> &str {
-        "jaccard"
-    }
 }
 
 /// Similarity metric for f64 numbers based on absolute difference.
 /// Normalizes the difference within a fixed range (100.0).
+#[derive(Debug)]
 pub struct NumericSimilarity;
 
 impl SimilarityMetric<f64, f64> for NumericSimilarity {
@@ -59,9 +54,5 @@ impl SimilarityMetric<f64, f64> for NumericSimilarity {
         } else {
             1.0 - (diff / max_diff)
         }
-    }
-
-    fn id(&self) -> &str {
-        "numeric"
     }
 }

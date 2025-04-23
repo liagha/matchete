@@ -1,16 +1,20 @@
+use std::collections::HashSet;
 use {
     core::cmp::{max, min},
-    std::collections::{HashMap, HashSet},
+    std::collections::HashMap,
     crate::{
-        common::SimilarityMetric,
-        utils::{
-            damerau_levenshtein_distance, KeyboardLayoutType
-        },
-        MatchType,
+        {
+            common::SimilarityMetric,
+            utils::{
+                damerau_levenshtein_distance, KeyboardLayoutType
+            },
+            MatchType,
+        }
     }
 };
 
 /// Jaro-Winkler similarity for strings
+#[derive(Debug)]
 pub struct JaroWinklerSimilarity {
     prefix_scale: f64,
 }
@@ -128,12 +132,10 @@ impl SimilarityMetric<String, String> for JaroWinklerSimilarity {
         jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
     }
 
-    fn id(&self) -> &str {
-        "jaro_winkler"
-    }
 }
 
 /// Cosine similarity for strings using character n-grams
+#[derive(Debug)]
 pub struct CosineSimilarity {
     n_gram_size: usize,
 }
@@ -199,14 +201,12 @@ impl SimilarityMetric<String, String> for CosineSimilarity {
         }
     }
 
-    fn id(&self) -> &str {
-        "cosine"
-    }
 }
 
-
+#[derive(Debug)]
 pub struct ExactMatchMetric;
 
+#[derive(Debug)]
 pub struct CaseInsensitiveMetric;
 
 impl SimilarityMetric<String, String> for CaseInsensitiveMetric {
@@ -214,9 +214,6 @@ impl SimilarityMetric<String, String> for CaseInsensitiveMetric {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
 
-    fn id(&self) -> &str {
-        "CaseInsensitive"
-    }
 }
 
 impl SimilarityMetric<&str, String> for CaseInsensitiveMetric {
@@ -224,9 +221,6 @@ impl SimilarityMetric<&str, String> for CaseInsensitiveMetric {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
 
-    fn id(&self) -> &str {
-        "CaseInsensitive"
-    }
 }
 
 impl SimilarityMetric<String, &str> for CaseInsensitiveMetric {
@@ -234,11 +228,9 @@ impl SimilarityMetric<String, &str> for CaseInsensitiveMetric {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
 
-    fn id(&self) -> &str {
-        "CaseInsensitive"
-    }
 }
 
+#[derive(Debug)]
 pub struct PrefixMetric;
 
 impl SimilarityMetric<String, String> for PrefixMetric {
@@ -253,9 +245,6 @@ impl SimilarityMetric<String, String> for PrefixMetric {
         }
     }
 
-    fn id(&self) -> &str {
-        "Prefix"
-    }
 
     fn match_type(&self, query: &String, candidate: &String) -> Option<MatchType> {
         let score = self.calculate(query, candidate);
@@ -279,11 +268,9 @@ impl SimilarityMetric<&str, String> for PrefixMetric {
         }
     }
 
-    fn id(&self) -> &str {
-        "Prefix"
-    }
 }
 
+#[derive(Debug)]
 pub struct SuffixMetric;
 
 impl SimilarityMetric<String, String> for SuffixMetric {
@@ -298,11 +285,9 @@ impl SimilarityMetric<String, String> for SuffixMetric {
         }
     }
 
-    fn id(&self) -> &str {
-        "Suffix"
-    }
 }
 
+#[derive(Debug)]
 pub struct SubstringMetric;
 
 impl SimilarityMetric<String, String> for SubstringMetric {
@@ -317,11 +302,9 @@ impl SimilarityMetric<String, String> for SubstringMetric {
         }
     }
 
-    fn id(&self) -> &str {
-        "Substring"
-    }
 }
 
+#[derive(Debug)]
 pub struct EditDistanceMetric;
 
 impl SimilarityMetric<String, String> for EditDistanceMetric {
@@ -336,11 +319,9 @@ impl SimilarityMetric<String, String> for EditDistanceMetric {
         1.0 - (distance as f64 / max_len as f64)
     }
 
-    fn id(&self) -> &str {
-        "EditDistance"
-    }
 }
 
+#[derive(Debug)]
 pub struct TokenSimilarityMetric {
     pub separators: Vec<char>,
 }
@@ -364,9 +345,6 @@ impl SimilarityMetric<String, String> for TokenSimilarityMetric {
         self.token_similarity(&s1_tokens, &s2_tokens)
     }
 
-    fn id(&self) -> &str {
-        "TokenSimilarity"
-    }
 }
 
 impl TokenSimilarityMetric {
@@ -450,6 +428,7 @@ impl TokenSimilarityMetric {
     }
 }
 
+#[derive(Debug)]
 pub struct AcronymMetric {
     pub token_metric: TokenSimilarityMetric,
     pub max_acronym_length: usize,
@@ -490,9 +469,6 @@ impl SimilarityMetric<String, String> for AcronymMetric {
         0.0
     }
 
-    fn id(&self) -> &str {
-        "Acronym"
-    }
 
     fn match_type(&self, query: &String, candidate: &String) -> Option<MatchType> {
         let score = self.calculate(query, candidate);
@@ -504,6 +480,7 @@ impl SimilarityMetric<String, String> for AcronymMetric {
     }
 }
 
+#[derive(Debug)]
 pub struct KeyboardProximityMetric {
     pub keyboard_layout: HashMap<char, Vec<char>>,
     pub layout_type: KeyboardLayoutType,
@@ -572,16 +549,9 @@ impl SimilarityMetric<String, String> for KeyboardProximityMetric {
             base_similarity * (1.0 + 0.3 * keyboard_factor) * length_similarity
         }
     }
-
-    fn id(&self) -> &str {
-        match self.layout_type {
-            KeyboardLayoutType::Qwerty => "QwertyProximity",
-            KeyboardLayoutType::Dvorak => "DvorakProximity",
-            KeyboardLayoutType::Custom(_) => "CustomKeyboardProximity",
-        }
-    }
 }
 
+#[derive(Debug)]
 pub struct FuzzySearchMetric {
     pub token_metric: TokenSimilarityMetric,
     pub min_token_similarity: f64,
@@ -640,15 +610,14 @@ impl SimilarityMetric<String, String> for FuzzySearchMetric {
         coverage * avg_similarity * (0.7 + 0.3 * coverage)
     }
 
-    fn id(&self) -> &str {
-        "FuzzySearch"
-    }
 }
 
+#[derive(Debug)]
 pub struct PhoneticMetric {
     pub mode: PhoneticMode,
 }
 
+#[derive(Debug)]
 pub enum PhoneticMode {
     Soundex,
     DoubleMetaphone,
@@ -701,12 +670,6 @@ impl SimilarityMetric<String, String> for PhoneticMetric {
             }
         }
     }
-    fn id(&self) -> &str {
-        match self.mode {
-            PhoneticMode::Soundex => "Soundex",
-            PhoneticMode::DoubleMetaphone => "DoubleMetaphone",
-        }
-    }
 }
 
 impl PhoneticMetric {
@@ -754,6 +717,7 @@ impl PhoneticMetric {
     }
 }
 
+#[derive(Debug)]
 pub struct NGramMetric {
     pub n: usize,
 }
@@ -791,9 +755,6 @@ impl SimilarityMetric<String, String> for NGramMetric {
         (2.0 * intersection as f64) / (s1_ngrams.len() + s2_ngrams.len()) as f64
     }
 
-    fn id(&self) -> &str {
-        "NGram"
-    }
 }
 
 impl NGramMetric {
@@ -819,6 +780,7 @@ impl NGramMetric {
 }
 
 /// Word overlap similarity using Jaccard similarity with customizable tokenization
+#[derive(Debug)]
 pub struct WordOverlapSimilarity {
     /// Whether to ignore case when comparing words
     ignore_case: bool,
@@ -1012,9 +974,6 @@ impl SimilarityMetric<String, String> for WordOverlapSimilarity {
         }
     }
 
-    fn id(&self) -> &str {
-        "word_overlap"
-    }
 }
 
 // Support for string references
@@ -1024,9 +983,6 @@ impl SimilarityMetric<&str, String> for WordOverlapSimilarity {
         self.calculate(&query_str, candidate)
     }
 
-    fn id(&self) -> &str {
-        "word_overlap"
-    }
 }
 
 impl SimilarityMetric<String, &str> for WordOverlapSimilarity {
@@ -1035,12 +991,9 @@ impl SimilarityMetric<String, &str> for WordOverlapSimilarity {
         self.calculate(query, &candidate_str)
     }
 
-    fn id(&self) -> &str {
-        "word_overlap"
-    }
 }
 
-/// Levenshtein distance-based similarity for strings
+#[derive(Debug)]
 pub struct LevenshteinSimilarity;
 
 impl LevenshteinSimilarity {
@@ -1110,9 +1063,6 @@ impl SimilarityMetric<String, String> for LevenshteinSimilarity {
         1.0 - (distance as f64 / max_len as f64)
     }
 
-    fn id(&self) -> &str {
-        "levenshtein"
-    }
 
     fn match_type(&self, query: &String, candidate: &String) -> Option<MatchType> {
         let score = self.calculate(query, candidate);
@@ -1137,9 +1087,6 @@ impl SimilarityMetric<&str, String> for LevenshteinSimilarity {
         1.0 - (distance as f64 / max_len as f64)
     }
 
-    fn id(&self) -> &str {
-        "levenshtein"
-    }
 }
 
 impl SimilarityMetric<String, &str> for LevenshteinSimilarity {
@@ -1154,9 +1101,6 @@ impl SimilarityMetric<String, &str> for LevenshteinSimilarity {
         1.0 - (distance as f64 / max_len as f64)
     }
 
-    fn id(&self) -> &str {
-        "levenshtein"
-    }
 }
 
 impl SimilarityMetric<String, String> for ExactMatchMetric {
@@ -1166,9 +1110,5 @@ impl SimilarityMetric<String, String> for ExactMatchMetric {
         } else {
             0.0
         }
-    }
-
-    fn id(&self) -> &str {
-        "ExactMatch"
     }
 }
