@@ -20,8 +20,7 @@ Add Matchete to your project by including it in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-matchete = "0.1.0"  # Replace with the actual version
-axo-hash = "0.3"    # Required dependency
+matchete = "0.0.1"  # Replace with the actual version
 ```
 
 Ensure you have [Rust](https://www.rust-lang.org/tools/install) installed via rustup.
