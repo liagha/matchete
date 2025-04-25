@@ -1,7 +1,10 @@
-use std::collections::HashSet;
 use {
     core::cmp::{max, min},
-    std::collections::HashMap,
+    hashish::{
+        HashMap,
+        HashSet
+    },
+
     crate::{
         {
             common::SimilarityMetric,

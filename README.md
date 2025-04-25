@@ -20,7 +20,7 @@ Add Matchete to your project by including it in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-matchete = "0.0.1"  # Replace with the actual version
+matchete = "0.0.3"  # Replace with the actual version
 ```
 
 Ensure you have [Rust](https://www.rust-lang.org/tools/install) installed via rustup.
@@ -62,11 +62,11 @@ fn main() {
 
 The `examples` folder contains practical demonstrations of Matchete's capabilities:
 
-- `basic_string_matching.rs`: Simple string matching with a single metric.
-- `multiple_metrics.rs`: Combining metrics using `MatcherBuilder` with conditional thresholds.
-- `numeric_matching.rs`: Matching `f64` numbers with a custom metric.
-- `detailed_analysis.rs`: Analyzing matches with per-metric score details.
-- `multi_matcher.rs`: Combining multiple matchers with `MultiMatcher`.
+- `string.rs`: Simple string matching with a single metric.
+- `multimetrics.rs`: Combining metrics using `MatcherBuilder` with conditional thresholds.
+- `numeric.rs`: Matching `f64` numbers with a custom metric.
+- `analysis.rs`: Analyzing matches with per-metric score details.
+- `multimatcher.rs`: Combining multiple matchers with `MultiMatcher`.
 
 Run an example using:
 ```bash
@@ -84,7 +84,7 @@ Customize Matchete's behavior with:
 - **Conditional Thresholds**: Apply dynamic thresholds based on query properties.
 - **Metric Groups**: Organize metrics for advanced strategies like fallback chains.
 
-See `multiple_metrics.rs` for an example of complex configurations.
+See `multimetrics.rs` for an example of complex configurations.
 
 ## Contributing
 

@@ -1,6 +1,12 @@
-use core::fmt::Debug;
-use crate::SimilarityMetric;
-use std::marker::PhantomData;
+use {
+    core::{
+        fmt::Debug,
+        marker::PhantomData,
+    },
+    crate::{
+        SimilarityMetric,
+    }
+};
 
 /// Closure-based similarity metric
 #[derive(Debug)]

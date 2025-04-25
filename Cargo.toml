@@ -1,6 +1,6 @@
 [package]
 name = "matchete"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 authors = ["Ali Aghaahmadi <itsaliaghaahmadi@gmail.com>"]
 description = "A fast and flexible matcher for comparing and diffing data structures."
@@ -9,3 +9,4 @@ keywords = ["matcher", "cmp", "data", "pattern", "rust"]
 categories = ["development-tools", "parsing"]
 
 [dependencies]
+hashish = { version = "0.0.1" }

@@ -1,11 +1,22 @@
 #![allow(unused_variables, unused_mut)]
 
-use std::collections::HashMap;
-use core::marker::PhantomData;
-use core::fmt::Debug;
-use crate::{DetailedMatchResult, MatchResult, MatchType, MatcherConfig, MetricScore, SimilarityMetric};
-use crate::common::WeightedMetric;
-use crate::composite::{CompositeSimilarity, CompositeStrategy};
+use {
+    hashish::HashMap,
+    core::{
+        marker::PhantomData,
+        fmt::Debug,
+    },
+
+    crate::{
+        DetailedMatchResult, MatchResult, MatchType,
+        MatcherConfig, MetricScore, SimilarityMetric,
+        common::WeightedMetric,
+        composite::{
+            CompositeSimilarity,
+            CompositeStrategy,
+        }
+    }
+};
 
 /// Core matcher implementation that combines multiple similarity metrics
 pub struct Matcher<Q: Debug, C: Debug> {

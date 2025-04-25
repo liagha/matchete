@@ -2,7 +2,7 @@
 /// These metrics demonstrate how to implement the `SimilarityMetric` trait
 /// for strings and numbers.
 use matchete::SimilarityMetric;
-use std::collections::HashSet;
+use hashish::HashSet;
 
 /// A simple Levenshtein-like string similarity metric (for demonstration).
 /// Computes a score based on the difference in string lengths.

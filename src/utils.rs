@@ -1,5 +1,7 @@
-use core::cmp::min;
-use std::collections::HashMap;
+use {
+    core::cmp::min,
+    hashish::HashMap,
+};
 
 pub fn damerau_levenshtein_distance(s1: &str, s2: &str) -> usize {
     if s1 == s2 {

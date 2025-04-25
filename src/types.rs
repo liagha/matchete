@@ -1,5 +1,7 @@
-use core::fmt::Debug;
-use std::collections::HashMap;
+use {
+    core::fmt::Debug,
+    hashish::HashMap,
+};
 
 /// Represents a match result with score and type information
 #[derive(Debug, Clone)]
