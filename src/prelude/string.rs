@@ -1,5 +1,5 @@
 use {
-    crate::Scorer,
+    crate::Resemblance,
     core::cmp::{max, min},
     hashish::{
         HashMap,
@@ -18,7 +18,7 @@ pub struct JaroWinklerScorer {
 
 impl Default for JaroWinklerScorer {
     fn default() -> Self {
-        Self { prefix_scale: 0.1 } 
+        Self { prefix_scale: 0.1 }
     }
 }
 
@@ -114,8 +114,8 @@ impl JaroWinklerScorer {
     }
 }
 
-impl Scorer<String, String> for JaroWinklerScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for JaroWinklerScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let jaro_dist = self.jaro_distance(query, candidate);
 
         let prefix_len = self.get_common_prefix_length(query, candidate);
@@ -123,19 +123,19 @@ impl Scorer<String, String> for JaroWinklerScorer {
         jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
 
-impl Scorer<&str, String> for JaroWinklerScorer {
-    fn score(&self, query: &&str, candidate: &String) -> f64 {
+impl Resemblance<&str, String> for JaroWinklerScorer {
+    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let jaro_dist = self.jaro_distance(query, candidate);
         let prefix_len = self.get_common_prefix_length(query, candidate);
         jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
     }
 
-    fn exact(&self, query: &&str, candidate: &String) -> bool {
+    fn perfect(&self, query: &&str, candidate: &String) -> bool {
         *query == candidate
     }
 }
@@ -178,8 +178,8 @@ impl CosineScorer {
     }
 }
 
-impl Scorer<String, String> for CosineScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for CosineScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_n_grams = self.get_n_grams(query);
         let candidate_n_grams = self.get_n_grams(candidate);
 
@@ -205,7 +205,7 @@ impl Scorer<String, String> for CosineScorer {
         }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -213,22 +213,22 @@ impl Scorer<String, String> for CosineScorer {
 #[derive(Debug)]
 pub struct ExactMatchScorer;
 
-impl Scorer<String, String> for ExactMatchScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for ExactMatchScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         if query == candidate { 1.0 } else { 0.0 }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
 
-impl Scorer<&str, String> for ExactMatchScorer {
-    fn score(&self, query: &&str, candidate: &String) -> f64 {
+impl Resemblance<&str, String> for ExactMatchScorer {
+    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         if *query == candidate { 1.0 } else { 0.0 }
     }
 
-    fn exact(&self, query: &&str, candidate: &String) -> bool {
+    fn perfect(&self, query: &&str, candidate: &String) -> bool {
         *query == candidate
     }
 }
@@ -236,32 +236,32 @@ impl Scorer<&str, String> for ExactMatchScorer {
 #[derive(Debug)]
 pub struct CaseInsensitiveScorer;
 
-impl Scorer<String, String> for CaseInsensitiveScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for CaseInsensitiveScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query.to_lowercase() == candidate.to_lowercase()
     }
 }
 
-impl Scorer<&str, String> for CaseInsensitiveScorer {
-    fn score(&self, query: &&str, candidate: &String) -> f64 {
+impl Resemblance<&str, String> for CaseInsensitiveScorer {
+    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
 
-    fn exact(&self, query: &&str, candidate: &String) -> bool {
+    fn perfect(&self, query: &&str, candidate: &String) -> bool {
         query.to_lowercase() == candidate.to_lowercase()
     }
 }
 
-impl Scorer<String, &str> for CaseInsensitiveScorer {
-    fn score(&self, query: &String, candidate: &&str) -> f64 {
+impl Resemblance<String, &str> for CaseInsensitiveScorer {
+    fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
 
-    fn exact(&self, query: &String, candidate: &&str) -> bool {
+    fn perfect(&self, query: &String, candidate: &&str) -> bool {
         query.to_lowercase() == candidate.to_lowercase()
     }
 }
@@ -269,8 +269,8 @@ impl Scorer<String, &str> for CaseInsensitiveScorer {
 #[derive(Debug)]
 pub struct PrefixScorer;
 
-impl Scorer<String, String> for PrefixScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for PrefixScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -281,13 +281,13 @@ impl Scorer<String, String> for PrefixScorer {
         }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
 
-impl Scorer<&str, String> for PrefixScorer {
-    fn score(&self, query: &&str, candidate: &String) -> f64 {
+impl Resemblance<&str, String> for PrefixScorer {
+    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -298,7 +298,7 @@ impl Scorer<&str, String> for PrefixScorer {
         }
     }
 
-    fn exact(&self, query: &&str, candidate: &String) -> bool {
+    fn perfect(&self, query: &&str, candidate: &String) -> bool {
         *query == candidate
     }
 }
@@ -306,8 +306,8 @@ impl Scorer<&str, String> for PrefixScorer {
 #[derive(Debug)]
 pub struct SuffixScorer;
 
-impl Scorer<String, String> for SuffixScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for SuffixScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -318,7 +318,7 @@ impl Scorer<String, String> for SuffixScorer {
         }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -326,8 +326,8 @@ impl Scorer<String, String> for SuffixScorer {
 #[derive(Debug)]
 pub struct SubstringScorer;
 
-impl Scorer<String, String> for SubstringScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for SubstringScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -338,7 +338,7 @@ impl Scorer<String, String> for SubstringScorer {
         }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -346,8 +346,8 @@ impl Scorer<String, String> for SubstringScorer {
 #[derive(Debug)]
 pub struct EditDistanceScorer;
 
-impl Scorer<String, String> for EditDistanceScorer {
-    fn score(&self, s1: &String, s2: &String) -> f64 {
+impl Resemblance<String, String> for EditDistanceScorer {
+    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         let distance = damerau_levenshtein_distance(s1, s2);
         let max_len = max(s1.len(), s2.len());
 
@@ -358,7 +358,7 @@ impl Scorer<String, String> for EditDistanceScorer {
         1.0 - (distance as f64 / max_len as f64)
     }
 
-    fn exact(&self, s1: &String, s2: &String) -> bool {
+    fn perfect(&self, s1: &String, s2: &String) -> bool {
         s1 == s2
     }
 }
@@ -457,8 +457,8 @@ impl TokenSimilarityScorer {
     }
 }
 
-impl Scorer<String, String> for TokenSimilarityScorer {
-    fn score(&self, s1: &String, s2: &String) -> f64 {
+impl Resemblance<String, String> for TokenSimilarityScorer {
+    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         let s1_lower = s1.to_lowercase();
         let s2_lower = s2.to_lowercase();
 
@@ -468,7 +468,7 @@ impl Scorer<String, String> for TokenSimilarityScorer {
         self.token_similarity(&s1_tokens, &s2_tokens)
     }
 
-    fn exact(&self, s1: &String, s2: &String) -> bool {
+    fn perfect(&self, s1: &String, s2: &String) -> bool {
         s1 == s2
     }
 }
@@ -488,8 +488,8 @@ impl Default for AcronymScorer {
     }
 }
 
-impl Scorer<String, String> for AcronymScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for AcronymScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         if query.len() > self.max_acronym_length {
             return 0.0;
         }
@@ -514,7 +514,7 @@ impl Scorer<String, String> for AcronymScorer {
         0.0
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -543,8 +543,8 @@ impl KeyboardProximityScorer {
     }
 }
 
-impl Scorer<String, String> for KeyboardProximityScorer {
-    fn score(&self, s1: &String, s2: &String) -> f64 {
+impl Resemblance<String, String> for KeyboardProximityScorer {
+    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         let s1_lower = s1.to_lowercase();
         let s2_lower = s2.to_lowercase();
 
@@ -589,7 +589,7 @@ impl Scorer<String, String> for KeyboardProximityScorer {
         }
     }
 
-    fn exact(&self, s1: &String, s2: &String) -> bool {
+    fn perfect(&self, s1: &String, s2: &String) -> bool {
         s1 == s2
     }
 }
@@ -609,8 +609,8 @@ impl Default for FuzzySearchScorer {
     }
 }
 
-impl Scorer<String, String> for FuzzySearchScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for FuzzySearchScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -653,7 +653,7 @@ impl Scorer<String, String> for FuzzySearchScorer {
         coverage * avg_similarity * (0.7 + 0.3 * coverage)
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -722,8 +722,8 @@ impl PhoneticScorer {
     }
 }
 
-impl Scorer<String, String> for PhoneticScorer {
-    fn score(&self, s1: &String, s2: &String) -> f64 {
+impl Resemblance<String, String> for PhoneticScorer {
+    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         match self.mode {
             PhoneticMode::Soundex => {
                 let s1_code = self.soundex(s1);
@@ -761,7 +761,7 @@ impl Scorer<String, String> for PhoneticScorer {
         }
     }
 
-    fn exact(&self, s1: &String, s2: &String) -> bool {
+    fn perfect(&self, s1: &String, s2: &String) -> bool {
         s1 == s2
     }
 }
@@ -799,8 +799,8 @@ impl NGramScorer {
     }
 }
 
-impl Scorer<String, String> for NGramScorer {
-    fn score(&self, s1: &String, s2: &String) -> f64 {
+impl Resemblance<String, String> for NGramScorer {
+    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         if s1.is_empty() || s2.is_empty() {
             return if s1.is_empty() && s2.is_empty() { 1.0 } else { 0.0 };
         }
@@ -826,7 +826,7 @@ impl Scorer<String, String> for NGramScorer {
         (2.0 * intersection as f64) / (s1_ngrams.len() + s2_ngrams.len()) as f64
     }
 
-    fn exact(&self, s1: &String, s2: &String) -> bool {
+    fn perfect(&self, s1: &String, s2: &String) -> bool {
         s1 == s2
     }
 }
@@ -980,8 +980,8 @@ impl WordOverlapScorer {
     }
 }
 
-impl Scorer<String, String> for WordOverlapScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for WordOverlapScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_words = self.get_words(query);
         let candidate_words = self.get_words(candidate);
 
@@ -1008,29 +1008,29 @@ impl Scorer<String, String> for WordOverlapScorer {
         }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
 
-impl Scorer<&str, String> for WordOverlapScorer {
-    fn score(&self, query: &&str, candidate: &String) -> f64 {
+impl Resemblance<&str, String> for WordOverlapScorer {
+    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let query_str = query.to_string();
-        self.score(&query_str, candidate)
+        self.resemblance(&query_str, candidate)
     }
 
-    fn exact(&self, query: &&str, candidate: &String) -> bool {
+    fn perfect(&self, query: &&str, candidate: &String) -> bool {
         *query == candidate
     }
 }
 
-impl Scorer<String, &str> for WordOverlapScorer {
-    fn score(&self, query: &String, candidate: &&str) -> f64 {
+impl Resemblance<String, &str> for WordOverlapScorer {
+    fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
         let candidate_str = candidate.to_string();
-        self.score(query, &candidate_str)
+        self.resemblance(query, &candidate_str)
     }
 
-    fn exact(&self, query: &String, candidate: &&str) -> bool {
+    fn perfect(&self, query: &String, candidate: &&str) -> bool {
         query == *candidate
     }
 }

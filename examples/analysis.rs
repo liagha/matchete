@@ -1,25 +1,25 @@
-use matchete::{Matcher, Scorer};
+use matchete::{Assessor, Resemblance};
 
 #[derive(Debug)]
-struct LevenshteinScorer;
+struct LevenshteinResembler;
 
-impl Scorer<String, String> for LevenshteinScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for LevenshteinResembler {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let distance = levenshtein_distance(query, candidate);
         let max_len = query.len().max(candidate.len());
         if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
 
 #[derive(Debug)]
-struct JaccardScorer;
+struct JaccardResembler;
 
-impl Scorer<String, String> for JaccardScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for JaccardResembler {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_chars: std::collections::HashSet<char> = query.chars().collect();
         let item_chars: std::collections::HashSet<char> = candidate.chars().collect();
 
@@ -29,7 +29,7 @@ impl Scorer<String, String> for JaccardScorer {
         if union == 0 { 1.0 } else { intersection as f64 / union as f64 }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -59,10 +59,10 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 }
 
 fn main() {
-    let matcher = Matcher::<String, String>::new()
-        .add(LevenshteinScorer, 0.7, "levenshtein")
-        .add(JaccardScorer, 0.3, "jaccard")
-        .threshold(0.5);
+    let assessor = Assessor::<String, String>::new()
+        .with(LevenshteinResembler, 0.7)
+        .with(JaccardResembler, 0.3)
+        .floor(0.5);
 
     let query = String::from("test");
     let candidate = String::from("tent");
@@ -70,18 +70,48 @@ fn main() {
     println!("Detailed Analysis Example");
     println!("========================");
 
-    let result = matcher.result(&query, &candidate);
-    println!("Query: {}", result.query);
-    println!("Candidate: {}", result.candidate);
-    println!("Overall score: {:.2}", result.score);
-    println!("Exact match: {}", result.exact);
-    println!("Is match: {}", matcher.matches(&query, &candidate));
-    println!("Individual scorer details:");
+    let verdict = assessor.verdict(&query, &candidate);
+    println!("Query: {}", verdict.query);
+    println!("Candidate: {}", verdict.candidate);
+    println!("Overall resemblance: {:.2}", verdict.resemblance);
+    println!("Perfect match: {}", verdict.perfect);
+    println!("Is viable: {}", assessor.viable(&query, &candidate));
+    println!("Disposition: {:?}", assessor.disposition(&query, &candidate));
+    println!("Individual resembler facets:");
 
-    for (i, detail) in result.details.iter().enumerate() {
-        println!("  Scorer {}: {}", i + 1, detail.weight.name);
-        println!("    Raw score: {:.2}", detail.score);
-        println!("    Weight: {:.2}", detail.weight.value);
-        println!("    Weighted score: {:.2}", detail.score * detail.weight.value);
+    // Get resembler names using Debug trait
+    let resembler_names: Vec<String> = assessor.resemblers.iter()
+        .map(|resembler| format!("{:?}", resembler))
+        .collect();
+
+    for (i, facet) in verdict.facets.iter().enumerate() {
+        println!("  Resembler {}: {}", i + 1, resembler_names[i]);
+        println!("    Raw resemblance: {:.2}", facet.resemblance);
+        println!("    Influence magnitude: {:.2}", facet.influence.magnitude);
+        println!("    Contribution: {:.2}", facet.contribution);
+    }
+
+    // Example of finding best match from multiple candidates
+    println!("\nBest Match Example");
+    println!("==================");
+
+    let candidates = vec![
+        String::from("tent"),
+        String::from("test"),
+        String::from("toast"),
+        String::from("rest"),
+    ];
+
+    if let Some(champion) = assessor.champion(&query, &candidates) {
+        println!("Champion: {} (resemblance: {:.2})", champion.candidate, champion.resemblance);
+    }
+
+    // Example of getting shortlist
+    println!("\nShortlist Example");
+    println!("=================");
+
+    let shortlist = assessor.shortlist(&query, &candidates);
+    for (i, verdict) in shortlist.iter().enumerate() {
+        println!("{}. {} (resemblance: {:.2})", i + 1, verdict.candidate, verdict.resemblance);
     }
 }

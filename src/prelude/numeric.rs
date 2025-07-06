@@ -1,4 +1,4 @@
-use crate::Scorer;
+use crate::Resemblance;
 
 #[derive(Debug)]
 pub struct NumericProximityScorer {
@@ -21,12 +21,12 @@ impl NumericProximityScorer {
     }
 }
 
-impl<T, U> Scorer<T, U> for NumericProximityScorer
+impl<T, U> Resemblance<T, U> for NumericProximityScorer
 where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, candidate: &U) -> f64 {
+    fn resemblance(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -36,7 +36,7 @@ where
         (-normalized_diff).exp()
     }
 
-    fn exact(&self, query: &T, candidate: &U) -> bool {
+    fn perfect(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -68,12 +68,12 @@ impl RangeProximityScorer {
     }
 }
 
-impl<T, U> Scorer<T, U> for RangeProximityScorer
+impl<T, U> Resemblance<T, U> for RangeProximityScorer
 where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, candidate: &U) -> f64 {
+    fn resemblance(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -92,7 +92,7 @@ where
         1.0 - (actual_distance / max_distance).min(1.0)
     }
 
-    fn exact(&self, query: &T, candidate: &U) -> bool {
+    fn perfect(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -103,12 +103,12 @@ where
 #[derive(Debug)]
 pub struct PercentageProximityScorer;
 
-impl<T, U> Scorer<T, U> for PercentageProximityScorer
+impl<T, U> Resemblance<T, U> for PercentageProximityScorer
 where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, candidate: &U) -> f64 {
+    fn resemblance(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -126,7 +126,7 @@ where
         smaller / larger
     }
 
-    fn exact(&self, query: &T, candidate: &U) -> bool {
+    fn perfect(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -155,12 +155,12 @@ impl ExponentialDecayScorer {
     }
 }
 
-impl<T, U> Scorer<T, U> for ExponentialDecayScorer
+impl<T, U> Resemblance<T, U> for ExponentialDecayScorer
 where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, candidate: &U) -> f64 {
+    fn resemblance(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -169,7 +169,7 @@ where
         (-self.decay_factor * difference).exp()
     }
 
-    fn exact(&self, query: &T, candidate: &U) -> bool {
+    fn perfect(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -198,12 +198,12 @@ impl ThresholdProximityScorer {
     }
 }
 
-impl<T, U> Scorer<T, U> for ThresholdProximityScorer
+impl<T, U> Resemblance<T, U> for ThresholdProximityScorer
 where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, candidate: &U) -> f64 {
+    fn resemblance(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 
@@ -216,7 +216,7 @@ where
         }
     }
 
-    fn exact(&self, query: &T, candidate: &U) -> bool {
+    fn perfect(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
         let item_val: f64 = (*candidate).into();
 

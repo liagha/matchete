@@ -1,4 +1,4 @@
-use crate::Scorer;
+use crate::Resemblance;
 
 /// Soundex phonetic encoding for names with improved handling of edge cases
 /// and performance optimizations
@@ -100,7 +100,7 @@ impl SoundexScorer {
         result
     }
 
-    /// Calculates partial matching score for two Soundex codes
+    /// Calculates partial matching resemblance for two Soundex codes
     fn partial_match_score(&self, code1: &str, code2: &str) -> f64 {
         let code1_chars: Vec<char> = code1.chars().collect();
         let code2_chars: Vec<char> = code2.chars().collect();
@@ -118,8 +118,8 @@ impl SoundexScorer {
     }
 }
 
-impl Scorer<String, String> for SoundexScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for SoundexScorer {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         // Handle empty strings
         if query.is_empty() && candidate.is_empty() {
             return 1.0;
@@ -136,11 +136,11 @@ impl Scorer<String, String> for SoundexScorer {
             return 1.0;
         }
 
-        // Calculate partial match score
+        // Calculate partial match resemblance
         self.partial_match_score(&query_soundex, &item_soundex)
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         // Handle empty strings
         if query.is_empty() && candidate.is_empty() {
             return true;
@@ -158,40 +158,40 @@ impl Scorer<String, String> for SoundexScorer {
 }
 
 // Add support for string references
-impl Scorer<&str, String> for SoundexScorer {
-    fn score(&self, query: &&str, candidate: &String) -> f64 {
+impl Resemblance<&str, String> for SoundexScorer {
+    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let query_str = query.to_string();
-        self.score(&query_str, candidate)
+        self.resemblance(&query_str, candidate)
     }
 
-    fn exact(&self, query: &&str, candidate: &String) -> bool {
+    fn perfect(&self, query: &&str, candidate: &String) -> bool {
         let query_str = query.to_string();
-        self.exact(&query_str, candidate)
+        self.perfect(&query_str, candidate)
     }
 }
 
-impl Scorer<String, &str> for SoundexScorer {
-    fn score(&self, query: &String, candidate: &&str) -> f64 {
+impl Resemblance<String, &str> for SoundexScorer {
+    fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
         let item_str = candidate.to_string();
-        self.score(query, &item_str)
+        self.resemblance(query, &item_str)
     }
 
-    fn exact(&self, query: &String, candidate: &&str) -> bool {
+    fn perfect(&self, query: &String, candidate: &&str) -> bool {
         let item_str = candidate.to_string();
-        self.exact(query, &item_str)
+        self.perfect(query, &item_str)
     }
 }
 
-impl Scorer<&str, &str> for SoundexScorer {
-    fn score(&self, query: &&str, candidate: &&str) -> f64 {
+impl Resemblance<&str, &str> for SoundexScorer {
+    fn resemblance(&self, query: &&str, candidate: &&str) -> f64 {
         let query_str = query.to_string();
         let item_str = candidate.to_string();
-        self.score(&query_str, &item_str)
+        self.resemblance(&query_str, &item_str)
     }
 
-    fn exact(&self, query: &&str, candidate: &&str) -> bool {
+    fn perfect(&self, query: &&str, candidate: &&str) -> bool {
         let query_str = query.to_string();
         let item_str = candidate.to_string();
-        self.exact(&query_str, &item_str)
+        self.perfect(&query_str, &item_str)
     }
 }

@@ -1,17 +1,17 @@
-use std::fmt::{Debug, Formatter};
-use matchete::{Matcher, Scorer};
+use std::fmt::{Debug};
+use matchete::{Assessor, Resemblance};
 
 #[derive(Debug)]
-struct LevenshteinScorer;
+struct LevenshteinResembler;
 
-impl Scorer<String, String> for LevenshteinScorer {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Resemblance<String, String> for LevenshteinResembler {
+    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let distance = levenshtein_distance(query, candidate);
         let max_len = query.len().max(candidate.len());
         if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
+    fn perfect(&self, query: &String, candidate: &String) -> bool {
         query == candidate
     }
 }
@@ -41,9 +41,9 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 }
 
 fn main() {
-    let matcher = Matcher::<String, String>::new()
-        .add(LevenshteinScorer, 1.0, "levenshtein")
-        .threshold(0.6);
+    let assessor = Assessor::<String, String>::new()
+        .with(LevenshteinResembler, 1.0)
+        .floor(0.6);
 
     let query = String::from("hello");
     let candidates = vec![
@@ -55,12 +55,24 @@ fn main() {
     println!("Basic String Matching Example");
     println!("============================");
 
-    if let Some(result) = matcher.best(&query, &candidates) {
-        println!("Best match found:");
-        println!("  Score: {:.2}", result.score);
-        println!("  Candidate: {}", result.candidate);
-        println!("  Exact: {}", result.exact);
+    if let Some(verdict) = assessor.champion(&query, &candidates) {
+        println!("Champion found:");
+        println!("  Resemblance: {:.2}", verdict.resemblance);
+        println!("  Candidate: {}", verdict.candidate);
+        println!("  Perfect: {}", verdict.perfect);
+        println!("  Disposition: {:?}", assessor.disposition(&query, &verdict.candidate));
     } else {
-        println!("No match found above threshold");
+        println!("No viable candidate found above floor threshold");
+    }
+
+    // Show all candidates for comparison
+    println!("\nAll Candidates Analysis");
+    println!("======================");
+
+    for candidate in &candidates {
+        let verdict = assessor.verdict(&query, candidate);
+        let disposition = assessor.disposition(&query, candidate);
+        println!("'{}': resemblance={:.2}, disposition={:?}",
+                 candidate, verdict.resemblance, disposition);
     }
 }
