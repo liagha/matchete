@@ -1,9 +1,6 @@
 mod core;
 mod matcher;
-mod metrics;
-mod utils;
+pub mod prelude;
 
 pub use core::*;
 pub use matcher::*;
-pub use metrics::*;
-pub use utils::*;

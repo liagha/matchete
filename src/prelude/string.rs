@@ -1,15 +1,13 @@
 use {
+    crate::Scorer,
     core::cmp::{max, min},
     hashish::{
         HashMap,
         HashSet
-    },
-    crate::{
-        Scorer,
-        utils::{
-            damerau_levenshtein_distance, KeyboardLayoutType
-        }
     }
+};
+use crate::prelude::utils::{
+    damerau_levenshtein_distance, KeyboardLayoutType
 };
 
 /// Jaro-Winkler similarity scorer for strings
