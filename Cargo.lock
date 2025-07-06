@@ -33,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "matchete"
-version = "0.0.4"
+version = "0.0.6"
 dependencies = [
  "hashish",
 ]
