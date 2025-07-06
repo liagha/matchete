@@ -10,6 +10,5 @@ pub use composite::*;
 pub use custom::*;
 pub use matcher::*;
 pub use metrics::*;
-pub use metrics::presets::*;
 pub use types::*;
 pub use utils::*;

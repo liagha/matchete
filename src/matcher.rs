@@ -1,36 +1,184 @@
-#![allow(unused_variables, unused_mut)]
-
 use {
-    hashish::HashMap,
     core::{
-        marker::PhantomData,
         fmt::Debug,
+        marker::PhantomData,
     },
-
-    crate::{
-        DetailedMatchResult, Product, MatchType,
-        MatcherConfig, MetricScore, SimilarityMetric,
-        common::WeightedMetric,
-        composite::{
-            CompositeSimilarity,
-            CompositeStrategy,
-        }
-    }
+    hashish::HashMap,
 };
 
-/// Core matcher implementation that combines multiple similarity metrics
-pub struct Matcher<Q: Debug, C: Debug> {
-    metrics: Vec<WeightedMetric<Q, C>>,
-    config: MatcherConfig,
+pub trait Similarity<Q, C> {
+    fn score(&self, query: &Q, candidate: &C) -> f64;
+    fn exact(&self, query: &Q, candidate: &C) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Match<Q, C> {
+    pub query: Q,
+    pub candidate: C,
+    pub score: f64,
+    pub exact: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Score {
+    pub value: f64,
+    pub weight: f64,
+}
+
+impl Score {
+    pub fn weighted(&self) -> f64 {
+        self.value * self.weight
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Analysis<Q, C> {
+    pub query: Q,
+    pub candidate: C,
+    pub score: f64,
+    pub exact: bool,
+    pub scores: Vec<Score>,
+}
+
+pub struct Weighted<Q, C, M> {
+    metric: M,
+    weight: f64,
     _phantom: PhantomData<(Q, C)>,
 }
 
-impl<Q: Clone + Debug, C: Clone + Debug> Default for Matcher<Q, C> {
+impl<Q, C, M> Weighted<Q, C, M> {
+    pub fn new(metric: M, weight: f64) -> Self {
+        Self {
+            metric,
+            weight,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<Q, C, M> Similarity<Q, C> for Weighted<Q, C, M>
+where
+    M: Similarity<Q, C>,
+{
+    fn score(&self, query: &Q, candidate: &C) -> f64 {
+        self.metric.score(query, candidate) * self.weight
+    }
+
+    fn exact(&self, query: &Q, candidate: &C) -> bool {
+        self.metric.exact(query, candidate)
+    }
+}
+
+pub struct Custom<Q, C, F> {
+    function: F,
+    _phantom: PhantomData<(Q, C)>,
+}
+
+impl<Q, C, F> Custom<Q, C, F>
+where
+    F: Fn(&Q, &C) -> f64,
+{
+    pub fn new(function: F) -> Self {
+        Self {
+            function,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<Q, C, F> Similarity<Q, C> for Custom<Q, C, F>
+where
+    F: Fn(&Q, &C) -> f64,
+{
+    fn score(&self, query: &Q, candidate: &C) -> f64 {
+        (self.function)(query, candidate)
+    }
+}
+
+pub enum Strategy {
+    Maximum,
+    Average,
+    Fallback(f64),
+    Weighted(Vec<f64>),
+}
+
+pub struct Composite<Q, C> {
+    metrics: Vec<Box<dyn Similarity<Q, C>>>,
+    strategy: Strategy,
+    _phantom: PhantomData<(Q, C)>,
+}
+
+impl<Q, C> Composite<Q, C> {
+    pub fn new(strategy: Strategy) -> Self {
+        Self {
+            metrics: Vec::new(),
+            strategy,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn add<M: Similarity<Q, C> + 'static>(mut self, metric: M) -> Self {
+        self.metrics.push(Box::new(metric));
+        self
+    }
+}
+
+impl<Q, C> Similarity<Q, C> for Composite<Q, C> {
+    fn score(&self, query: &Q, candidate: &C) -> f64 {
+        if self.metrics.is_empty() {
+            return 0.0;
+        }
+
+        let scores: Vec<f64> = self.metrics.iter()
+            .map(|m| m.score(query, candidate))
+            .collect();
+
+        match &self.strategy {
+            Strategy::Maximum => {
+                scores.iter().fold(0.0, |a, &b| a.max(b))
+            },
+            Strategy::Average => {
+                scores.iter().sum::<f64>() / scores.len() as f64
+            },
+            Strategy::Fallback(threshold) => {
+                scores.iter()
+                    .find(|&&s| s >= *threshold)
+                    .copied()
+                    .unwrap_or(0.0)
+            },
+            Strategy::Weighted(weights) => {
+                let total_weighted: f64 = scores.iter().enumerate()
+                    .map(|(i, &s)| s * weights.get(i).copied().unwrap_or(1.0))
+                    .sum();
+                let total_weights: f64 = weights.iter().sum();
+                if total_weights > 0.0 {
+                    total_weighted / total_weights
+                } else {
+                    0.0
+                }
+            }
+        }
+    }
+
+    fn exact(&self, query: &Q, candidate: &C) -> bool {
+        self.metrics.iter().any(|m| m.exact(query, candidate))
+    }
+}
+
+pub struct Matcher<Q, C> {
+    metrics: Vec<Box<dyn Similarity<Q, C>>>,
+    weights: Vec<f64>,
+    threshold: f64,
+}
+
+impl<Q, C> Default for Matcher<Q, C> {
     fn default() -> Self {
         Self {
             metrics: Vec::new(),
-            config: MatcherConfig::default(),
-            _phantom: PhantomData,
+            weights: Vec::new(),
+            threshold: 0.4,
         }
     }
 }
@@ -40,212 +188,103 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
         Self::default()
     }
 
-    pub fn with_metric<M: SimilarityMetric<Q, C> + 'static>(mut self, metric: M, weight: f64) -> Self {
-        self.metrics.push(WeightedMetric::new(metric, weight));
+    pub fn add<M: Similarity<Q, C> + 'static>(mut self, metric: M, weight: f64) -> Self {
+        self.metrics.push(Box::new(metric));
+        self.weights.push(weight);
         self
     }
 
-    pub fn with_threshold(mut self, threshold: f64) -> Self {
-        self.config.threshold = threshold;
+    pub fn threshold(mut self, threshold: f64) -> Self {
+        self.threshold = threshold;
         self
     }
 
-    pub fn with_option(mut self, key: &str, value: &str) -> Self {
-        if self.config.options.is_none() {
-            self.config.options = Some(HashMap::new());
-        }
-        if let Some(options) = &mut self.config.options {
-            options.insert(key.to_string(), value.to_string());
-        }
-        self
-    }
+    pub fn analyze(&self, query: &Q, candidate: &C) -> Analysis<Q, C> {
+        let exact = self.metrics.iter().any(|m| m.exact(query, candidate));
 
-    pub fn add_metric<M: SimilarityMetric<Q, C> + 'static>(&mut self, metric: M, weight: f64) -> &mut Self {
-        self.metrics.push(WeightedMetric::new(metric, weight));
-        self
-    }
+        let scores: Vec<Score> = self.metrics.iter()
+            .zip(&self.weights)
+            .map(|(m, &w)| Score {
+                value: m.score(query, candidate),
+                weight: w,
+            })
+            .collect();
 
-    pub fn set_threshold(&mut self, threshold: f64) -> &mut Self {
-        self.config.threshold = threshold;
-        self
-    }
+        let total_weighted: f64 = scores.iter().map(|s| s.weighted()).sum();
+        let total_weight: f64 = self.weights.iter().sum();
 
-    pub fn add_option(&mut self, key: &str, value: &str) -> &mut Self {
-        if self.config.options.is_none() {
-            self.config.options = Some(HashMap::new());
-        }
-        if let Some(options) = &mut self.config.options {
-            options.insert(key.to_string(), value.to_string());
-        }
-        self
-    }
-
-    /// Calculate scores from all metrics for a query-candidate pair
-    pub fn get_metric_scores(&self, query: &Q, candidate: &C) -> Vec<MetricScore> {
-        let mut scores = Vec::with_capacity(self.metrics.len());
-
-        for weighted_metric in &self.metrics {
-            let id = format!("{:?}", weighted_metric.metric);
-
-            let raw_score = weighted_metric.metric.calculate(query, candidate);
-            let weight = weighted_metric.weight;
-
-            scores.push(MetricScore {
-                id,
-                raw_score,
-                weight,
-                weighted_score: raw_score * weight,
-            });
-        }
-
-        scores.sort_by(|a, b| b.weighted_score.partial_cmp(&a.weighted_score).unwrap());
-        scores
-    }
-
-    /// Calculate overall score from weighted metric scores
-    fn calculate_overall_score(metric_scores: &[MetricScore]) -> f64 {
-        let mut total_weighted_score = 0.0;
-        let mut total_weight = 0.0;
-
-        for score in metric_scores {
-            total_weighted_score += score.weighted_score;
-            total_weight += score.weight;
-        }
-
-        if total_weight > 0.0 {
-            total_weighted_score / total_weight
+        let overall_score = if total_weight > 0.0 {
+            total_weighted / total_weight
         } else {
             0.0
-        }
-    }
-
-    /// Get the best performing metric
-    fn get_best_metric(metric_scores: &[MetricScore]) -> Option<String> {
-        metric_scores.iter()
-            .max_by(|a, b| a.raw_score.partial_cmp(&b.raw_score).unwrap())
-            .map(|score| score.id.clone())
-    }
-
-    /// Analyze a single query-candidate pair with detailed results
-    pub fn analyze(&self, query: &Q, candidate: &C) -> DetailedMatchResult<Q, C> {
-        let metric_scores = self.get_metric_scores(query, candidate);
-
-        let mut is_exact = false;
-        for weighted_metric in &self.metrics {
-            if weighted_metric.metric.is_exact_match(query, candidate) {
-                is_exact = true;
-                break;
-            }
-        }
-
-        let overall_score = Self::calculate_overall_score(&metric_scores);
-        let threshold = self.config.threshold;
-
-        let match_type = if is_exact {
-            MatchType::Exact
-        } else if overall_score >= threshold {
-            if let Some(best_metric) = Self::get_best_metric(&metric_scores) {
-                MatchType::Similar(best_metric)
-            } else {
-                MatchType::NotFound
-            }
-        } else {
-            MatchType::NotFound
         };
 
-        DetailedMatchResult {
+        Analysis {
             query: query.clone(),
             candidate: candidate.clone(),
             score: overall_score,
-            match_type,
-            metric_scores,
-            is_match: overall_score >= threshold,
+            exact,
+            scores,
         }
     }
 
-    /// Find best match for query among candidates
-    pub fn find_best_match(&self, query: &Q, candidates: &[C]) -> Option<Product<Q, C>> {
-        if candidates.is_empty() {
-            return None;
-        }
+    pub fn score(&self, query: &Q, candidate: &C) -> f64 {
+        self.analyze(query, candidate).score
+    }
 
+    pub fn matches(&self, query: &Q, candidate: &C) -> bool {
+        let analysis = self.analyze(query, candidate);
+        analysis.exact || analysis.score >= self.threshold
+    }
+
+    pub fn best(&self, query: &Q, candidates: &[C]) -> Option<Match<Q, C>> {
         candidates.iter()
-            .map(|candidate| {
-                let result = self.analyze(query, candidate);
-                Product {
-                    score: result.score,
+            .map(|c| {
+                let analysis = self.analyze(query, c);
+                Match {
                     query: query.clone(),
-                    candidate: candidate.clone(),
-                    match_type: result.match_type,
+                    candidate: c.clone(),
+                    score: analysis.score,
+                    exact: analysis.exact,
                 }
             })
-            .filter(|info| info.score >= self.config.threshold)
+            .filter(|m| m.exact || m.score >= self.threshold)
             .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
     }
 
-    /// Find all matches above threshold
-    pub fn find_matches(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<Product<Q, C>> {
-        let mut matches = Vec::new();
-
-        for candidate in candidates {
-            let result = self.analyze(query, candidate);
-
-            if result.is_match {
-                matches.push(Product {
-                    score: result.score,
+    pub fn find(&self, query: &Q, candidates: &[C]) -> Vec<Match<Q, C>> {
+        let mut matches: Vec<Match<Q, C>> = candidates.iter()
+            .map(|c| {
+                let analysis = self.analyze(query, c);
+                Match {
                     query: query.clone(),
-                    candidate: candidate.clone(),
-                    match_type: result.match_type,
-                });
-            }
-        }
+                    candidate: c.clone(),
+                    score: analysis.score,
+                    exact: analysis.exact,
+                }
+            })
+            .filter(|m| m.exact || m.score >= self.threshold)
+            .collect();
 
         matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        matches
+    }
 
-        if limit > 0 && matches.len() > limit {
+    pub fn find_limit(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<Match<Q, C>> {
+        let mut matches = self.find(query, candidates);
+        if matches.len() > limit {
             matches.truncate(limit);
         }
-
         matches
-    }
-
-    /// Find matches above a specific threshold
-    pub fn find_matches_by_threshold(&self, query: &Q, candidates: &[C], threshold: f64) -> Vec<Product<Q, C>> {
-        let actual_threshold = threshold.max(self.config.threshold);
-
-        let mut matches = Vec::new();
-
-        for candidate in candidates {
-            let result = self.analyze(query, candidate);
-
-            if result.score >= actual_threshold {
-                matches.push(Product {
-                    score: result.score,
-                    query: query.clone(),
-                    candidate: candidate.clone(),
-                    match_type: result.match_type,
-                });
-            }
-        }
-
-        matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-        matches
-    }
-
-    /// Check if candidate matches query above threshold
-    pub fn is_match(&self, query: &Q, candidate: &C) -> bool {
-        let result = self.analyze(query, candidate);
-        result.is_match
     }
 }
 
-/// Composite matcher that combines results from multiple matchers
-pub struct MultiMatcher<Q: Debug, C: Debug> {
-    matchers: Vec<Box<Matcher<Q, C>>>,
+pub struct MultiMatcher<Q, C> {
+    matchers: Vec<Matcher<Q, C>>,
     threshold: f64,
 }
 
-impl<Q: Clone + Debug, C: Clone + Debug> Default for MultiMatcher<Q, C> {
+impl<Q, C> Default for MultiMatcher<Q, C> {
     fn default() -> Self {
         Self {
             matchers: Vec::new(),
@@ -259,186 +298,65 @@ impl<Q: Clone + Debug, C: Clone + Debug + PartialEq> MultiMatcher<Q, C> {
         Self::default()
     }
 
-    pub fn with_matcher(mut self, matcher: Matcher<Q, C>) -> Self {
-        self.matchers.push(Box::new(matcher));
-        self
-    }
-
-    pub fn with_threshold(mut self, threshold: f64) -> Self {
-        self.threshold = threshold;
-        self
-    }
-
-    pub fn add_matcher(&mut self, matcher: Matcher<Q, C>) -> &mut Self {
-        self.matchers.push(Box::new(matcher));
-        self
-    }
-
-    pub fn set_threshold(&mut self, threshold: f64) -> &mut Self {
-        self.threshold = threshold;
-        self
-    }
-
-    /// Find best match across all matchers
-    pub fn find_best_match(&self, query: &Q, candidates: &[C]) -> Option<Product<Q, C>> {
-        if candidates.is_empty() || self.matchers.is_empty() {
-            return None;
-        }
-
-        let mut best_match = None;
-        let mut best_score = self.threshold;
-
-        for matcher in &self.matchers {
-            if let Some(match_result) = matcher.find_best_match(query, candidates) {
-                if match_result.score > best_score {
-                    best_score = match_result.score;
-                    best_match = Some(match_result);
-                }
-            }
-        }
-
-        best_match
-    }
-
-    /// Find all matches across all matchers
-    pub fn find_matches(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<Product<Q, C>> {
-        if candidates.is_empty() || self.matchers.is_empty() {
-            return Vec::new();
-        }
-
-        let mut all_matches = Vec::new();
-
-        for matcher in &self.matchers {
-            let matches = matcher.find_matches(query, candidates, 0);
-            all_matches.extend(matches);
-        }
-
-        all_matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-
-        // Deduplicate matches by candidate
-        all_matches.dedup_by(|a, b| a.candidate == b.candidate);
-
-        if limit > 0 && all_matches.len() > limit {
-            all_matches.truncate(limit);
-        }
-
-        all_matches
-    }
-}
-
-// In matcher.rs, enhance the MatcherBuilder
-pub struct MatcherBuilder<Q: Debug, C: Debug> {
-    matcher: Matcher<Q, C>,
-    metric_groups: Vec<(String, Vec<WeightedMetric<Q, C>>)>,
-    current_group: Option<String>,
-    conditional_thresholds: Vec<(Box<dyn Fn(&Q) -> bool>, f64)>,
-}
-
-impl<Q: Clone + Debug, C: Clone + Debug> MatcherBuilder<Q, C> {
-    pub fn new() -> Self {
-        Self {
-            matcher: Matcher::new(),
-            metric_groups: Vec::new(),
-            current_group: None,
-            conditional_thresholds: Vec::new(),
-        }
-    }
-
-    pub fn metric<M: SimilarityMetric<Q, C> + 'static>(mut self, metric: M, weight: f64) -> Self {
-        if let Some(group_name) = &self.current_group {
-            // Add to current group
-            let group = self.metric_groups.iter_mut()
-                .find(|(name, _)| name == group_name)
-                .unwrap();
-
-            group.1.push(WeightedMetric::new(metric, weight));
-        } else {
-            // Add directly to matcher
-            self.matcher.add_metric(metric, weight);
-        }
+    pub fn add(mut self, matcher: Matcher<Q, C>) -> Self {
+        self.matchers.push(matcher);
         self
     }
 
     pub fn threshold(mut self, threshold: f64) -> Self {
-        self.matcher.set_threshold(threshold);
+        self.threshold = threshold;
         self
     }
 
-    pub fn conditional_threshold<F>(mut self, condition: F, threshold: f64) -> Self
-    where
-        F: Fn(&Q) -> bool + 'static
-    {
-        self.conditional_thresholds.push((Box::new(condition), threshold));
-        self
+    pub fn best(&self, query: &Q, candidates: &[C]) -> Option<Match<Q, C>> {
+        self.matchers.iter()
+            .filter_map(|m| m.best(query, candidates))
+            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
     }
 
-    pub fn option(mut self, key: &str, value: &str) -> Self {
-        self.matcher.add_option(key, value);
-        self
-    }
+    pub fn find(&self, query: &Q, candidates: &[C]) -> Vec<Match<Q, C>> {
+        let mut all_matches = Vec::new();
 
-    pub fn begin_group(mut self, name: &str) -> Self {
-        self.current_group = Some(name.to_string());
-        // Create group if it doesn't exist
-        if !self.metric_groups.iter().any(|(n, _)| n == name) {
-            self.metric_groups.push((name.to_string(), Vec::new()));
-        }
-        self
-    }
-
-    pub fn end_group(mut self) -> Self {
-        self.current_group = None;
-        self
-    }
-
-    pub fn with_fallback_chain(mut self, threshold: f64) -> Self {
-        if self.metric_groups.is_empty() {
-            return self;
+        for matcher in &self.matchers {
+            all_matches.extend(matcher.find(query, candidates));
         }
 
-        // Create a composite fallback chain from all groups
-        let mut composite: CompositeSimilarity<Q, C> = CompositeSimilarity::new("fallback_chain", CompositeStrategy::Fallback(threshold));
+        all_matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        all_matches.dedup_by(|a, b| a.candidate == b.candidate);
+        all_matches
+    }
 
-        for (_, metrics) in &self.metric_groups {
-            for weighted_metric in metrics {
-                // Clone the trait object - this would require modifying WeightedMetric to support cloning
-                // For now, we'd need to reconstruct the metrics when building a fallback chain
-                // This is a simplification for the example
-                // composite.add_metric(weighted_metric.metric.clone());
-            }
+    pub fn find_limit(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<Match<Q, C>> {
+        let mut matches = self.find(query, candidates);
+        if matches.len() > limit {
+            matches.truncate(limit);
         }
+        matches
+    }
+}
 
-        // The actual implementation would add the composite metric
-        // self.matcher.add_metric(composite, 1.0);
+pub struct Builder<Q, C> {
+    matcher: Matcher<Q, C>,
+}
 
+impl<Q: Clone + Debug, C: Clone + Debug> Builder<Q, C> {
+    pub fn new() -> Self {
+        Self {
+            matcher: Matcher::new(),
+        }
+    }
+
+    pub fn metric<M: Similarity<Q, C> + 'static>(mut self, metric: M, weight: f64) -> Self {
+        self.matcher = self.matcher.add(metric, weight);
         self
     }
 
-    pub fn priority_chain(mut self) -> Self {
-        // Similar to fallback chain but using weighted strategy
-        // Would implement similar logic as above with CompositeStrategy::Weighted
-        self
-    }
-
-    pub fn dynamic_threshold<F>(mut self, threshold_fn: F) -> Self
-    where
-        F: Fn(&Q, &C) -> f64 + 'static
-    {
-        // Would store the function and modify the matcher to use it
-        // This is conceptual since it would require deeper changes to Matcher
+    pub fn threshold(mut self, threshold: f64) -> Self {
+        self.matcher = self.matcher.threshold(threshold);
         self
     }
 
     pub fn build(self) -> Matcher<Q, C> {
-        // Apply any conditional thresholds or other deferred configurations
-        let mut matcher = self.matcher;
-
-        // Add dynamic threshold resolution
-        if !self.conditional_thresholds.is_empty() {
-            matcher.add_option("has_conditional_thresholds", "true");
-            // In practice, we'd store these conditions for runtime evaluation
-        }
-
-        matcher
+        self.matcher
     }
 }
