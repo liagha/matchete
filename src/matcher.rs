@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use crate::{Scorer, Weight, Detail, Result, Kind, Weighted};
+use crate::{Scorer, Weight, Detail, Result, Kind};
 
 pub struct Matcher<Query, Item> {
     scorers: Vec<Box<dyn Scorer<Query, Item>>>,

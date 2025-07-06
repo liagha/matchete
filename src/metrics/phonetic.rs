@@ -23,7 +23,7 @@ impl SoundexScorer {
     /// Creates a new SoundexScorer with custom settings
     pub fn new(max_compare_length: usize, international_mode: bool) -> Self {
         SoundexScorer {
-            max_compare_length: max_compare_length.max(1).min(10), // Reasonable bounds
+            max_compare_length: max_compare_length.max(1).min(10), 
             international_mode,
         }
     }
@@ -36,22 +36,19 @@ impl SoundexScorer {
 
         let chars: Vec<char> = s.to_uppercase().chars().collect();
 
-        // Find first valid letter
         let first_char = chars.iter()
             .find(|&&c| c.is_ascii_alphabetic())
             .copied()
             .unwrap_or('0');
 
         if first_char == '0' {
-            return "0000".to_string(); // No valid letter found
+            return "0000".to_string();
         }
 
-        // Convert letters to soundex digits with improved handling
         let mut code = Vec::new();
-        let mut last_digit = '0'; // Invalid digit as initial state
+        let mut last_digit = '0';
 
         for &c in &chars {
-            // Standard Soundex encoding
             let mut digit = match c {
                 'B' | 'F' | 'P' | 'V' => '1',
                 'C' | 'G' | 'J' | 'K' | 'Q' | 'S' | 'X' | 'Z' => '2',
@@ -66,11 +63,11 @@ impl SoundexScorer {
             if self.international_mode {
                 // Additional international phonetic patterns
                 digit = match c {
-                    'Ñ' | 'Ń' => '5', // Spanish/Polish N sounds
-                    'Ç' => '2',       // French/Portuguese C sound
-                    'Ø' | 'Ö' => '0', // Scandinavian vowels
-                    'Æ' => '0',       // Treat as vowel
-                    'Ł' => '4',       // Polish L sound
+                    'Ñ' | 'Ń' => '5', 
+                    'Ç' => '2',      
+                    'Ø' | 'Ö' => '0',
+                    'Æ' => '0',      
+                    'Ł' => '4',      
                     _ => digit,
                 };
             }
@@ -97,7 +94,7 @@ impl SoundexScorer {
         if result.len() < self.max_compare_length + 1 {
             result.push_str(&"0".repeat(self.max_compare_length + 1 - result.len()));
         } else {
-            result.truncate(self.max_compare_length + 1); // +1 for first letter
+            result.truncate(self.max_compare_length + 1);
         }
 
         result

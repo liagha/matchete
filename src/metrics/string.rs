@@ -20,7 +20,7 @@ pub struct JaroWinklerScorer {
 
 impl Default for JaroWinklerScorer {
     fn default() -> Self {
-        Self { prefix_scale: 0.1 } // Standard prefix scaling factor
+        Self { prefix_scale: 0.1 } 
     }
 }
 
@@ -41,17 +41,14 @@ impl JaroWinklerScorer {
             return 0.0;
         }
 
-        // Maximum distance to consider characters as matching
         let match_distance = (s1_len.max(s2_len) / 2).max(1) - 1;
 
         let s1_chars: Vec<char> = s1.chars().collect();
         let s2_chars: Vec<char> = s2.chars().collect();
 
-        // Track matches
         let mut s1_matches = vec![false; s1_len];
         let mut s2_matches = vec![false; s2_len];
 
-        // Count matching characters
         let mut matches = 0;
         for i in 0..s1_len {
             let start = i.saturating_sub(match_distance).max(0);
@@ -71,7 +68,6 @@ impl JaroWinklerScorer {
             return 0.0;
         }
 
-        // Count transpositions
         let mut transpositions = 0;
         let mut k = 0;
 
@@ -89,7 +85,6 @@ impl JaroWinklerScorer {
             }
         }
 
-        // Calculate Jaro similarity
         let m = matches as f64;
         let t = transpositions as f64 / 2.0;
 
@@ -101,7 +96,7 @@ impl JaroWinklerScorer {
     }
 
     fn get_common_prefix_length(&self, s1: &str, s2: &str) -> usize {
-        let max_prefix_len = 4; // Standard prefix length for Jaro-Winkler
+        let max_prefix_len = 4;
 
         let s1_chars: Vec<char> = s1.chars().collect();
         let s2_chars: Vec<char> = s2.chars().collect();
@@ -125,7 +120,6 @@ impl Scorer<String, String> for JaroWinklerScorer {
     fn score(&self, query: &String, candidate: &String) -> f64 {
         let jaro_dist = self.jaro_distance(query, candidate);
 
-        // Apply Winkler modification (rewards strings with common prefixes)
         let prefix_len = self.get_common_prefix_length(query, candidate);
 
         jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
@@ -156,7 +150,7 @@ pub struct CosineScorer {
 
 impl Default for CosineScorer {
     fn default() -> Self {
-        Self { n_gram_size: 2 } // Default to bigrams
+        Self { n_gram_size: 2 }
     }
 }
 
@@ -195,7 +189,6 @@ impl Scorer<String, String> for CosineScorer {
             return if query.is_empty() && candidate.is_empty() { 1.0 } else { 0.0 };
         }
 
-        // Calculate dot product
         let mut dot_product = 0.0;
         for (n_gram, query_count) in &query_n_grams {
             if let Some(candidate_count) = candidate_n_grams.get(n_gram) {
@@ -203,7 +196,6 @@ impl Scorer<String, String> for CosineScorer {
             }
         }
 
-        // Calculate magnitudes
         let query_magnitude: f64 = query_n_grams.values().map(|count| (*count as f64).powi(2)).sum::<f64>().sqrt();
         let candidate_magnitude: f64 = candidate_n_grams.values().map(|count| (*count as f64).powi(2)).sum::<f64>().sqrt();
 
@@ -759,7 +751,6 @@ impl Scorer<String, String> for PhoneticScorer {
                     return 1.0;
                 }
 
-                // Just use soundex as fallback
                 let s1_code = self.soundex(s1);
                 let s2_code = self.soundex(s2);
 
@@ -869,9 +860,7 @@ impl Default for WordOverlapScorer {
     }
 }
 
-// Remove the duplicate Default implementation and fix the WordOverlapScorer
 impl WordOverlapScorer {
-    /// Create a new WordOverlapScorer with custom settings
     pub fn new(
         ignore_case: bool,
         min_word_length: usize,
@@ -1006,7 +995,6 @@ impl Scorer<String, String> for WordOverlapScorer {
             return 0.0;
         }
 
-        // Use standard Jaccard similarity for simple cases
         if query_words.len() <= 2 || candidate_words.len() <= 2 {
             let mut common_words = 0;
             for q_word in &query_words {
