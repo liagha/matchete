@@ -26,9 +26,9 @@ where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, item: &U) -> f64 {
+    fn score(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         let difference = (query_val - item_val).abs();
         let normalized_diff = difference / self.normalization_factor;
@@ -36,9 +36,9 @@ where
         (-normalized_diff).exp()
     }
 
-    fn exact(&self, query: &T, item: &U) -> bool {
+    fn exact(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         query_val == item_val
     }
@@ -73,9 +73,9 @@ where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, item: &U) -> f64 {
+    fn score(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         if query_val == item_val {
             return 1.0;
@@ -92,9 +92,9 @@ where
         1.0 - (actual_distance / max_distance).min(1.0)
     }
 
-    fn exact(&self, query: &T, item: &U) -> bool {
+    fn exact(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         query_val == item_val
     }
@@ -108,9 +108,9 @@ where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, item: &U) -> f64 {
+    fn score(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         if query_val == item_val {
             return 1.0;
@@ -126,9 +126,9 @@ where
         smaller / larger
     }
 
-    fn exact(&self, query: &T, item: &U) -> bool {
+    fn exact(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         query_val == item_val
     }
@@ -160,18 +160,18 @@ where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, item: &U) -> f64 {
+    fn score(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         let difference = (query_val - item_val).abs();
 
         (-self.decay_factor * difference).exp()
     }
 
-    fn exact(&self, query: &T, item: &U) -> bool {
+    fn exact(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         query_val == item_val
     }
@@ -203,9 +203,9 @@ where
     T: Into<f64> + Copy,
     U: Into<f64> + Copy,
 {
-    fn score(&self, query: &T, item: &U) -> f64 {
+    fn score(&self, query: &T, candidate: &U) -> f64 {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         let difference = (query_val - item_val).abs();
 
@@ -216,9 +216,9 @@ where
         }
     }
 
-    fn exact(&self, query: &T, item: &U) -> bool {
+    fn exact(&self, query: &T, candidate: &U) -> bool {
         let query_val: f64 = (*query).into();
-        let item_val: f64 = (*item).into();
+        let item_val: f64 = (*candidate).into();
 
         query_val == item_val
     }

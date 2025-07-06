@@ -1,18 +1,22 @@
-use std::fmt::{Debug, Formatter};
-use matchete::{Matcher, Scorer};
+use {
+    core::{
+        fmt::Debug,
+    },
+    matchete::{Matcher, Scorer},
+};
 
 #[derive(Debug)]
 struct NumericScorer;
 
 impl Scorer<f64, f64> for NumericScorer {
-    fn score(&self, query: &f64, item: &f64) -> f64 {
-        let diff = (query - item).abs();
-        let max_val = query.abs().max(item.abs());
+    fn score(&self, query: &f64, candidate: &f64) -> f64 {
+        let diff = (query - candidate).abs();
+        let max_val = query.abs().max(candidate.abs());
         if max_val == 0.0 { 1.0 } else { 1.0 - (diff / (max_val + 1.0)) }
     }
 
-    fn exact(&self, query: &f64, item: &f64) -> bool {
-        (query - item).abs() < f64::EPSILON
+    fn exact(&self, query: &f64, candidate: &f64) -> bool {
+        (query - candidate).abs() < f64::EPSILON
     }
 }
 
@@ -33,7 +37,7 @@ fn main() {
     for (i, result) in matches.iter().enumerate() {
         println!("Match {}:", i + 1);
         println!("  Score: {:.2}", result.score);
-        println!("  Item: {}", result.item);
+        println!("  Candidate: {}", result.candidate);
         println!("  Exact: {}", result.exact);
     }
 }

@@ -5,14 +5,14 @@ use matchete::{Matcher, Scorer};
 struct LevenshteinScorer;
 
 impl Scorer<String, String> for LevenshteinScorer {
-    fn score(&self, query: &String, item: &String) -> f64 {
-        let distance = levenshtein_distance(query, item);
-        let max_len = query.len().max(item.len());
+    fn score(&self, query: &String, candidate: &String) -> f64 {
+        let distance = levenshtein_distance(query, candidate);
+        let max_len = query.len().max(candidate.len());
         if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) }
     }
 
-    fn exact(&self, query: &String, item: &String) -> bool {
-        query == item
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
     }
 }
 
@@ -58,7 +58,7 @@ fn main() {
     if let Some(result) = matcher.best(&query, &candidates) {
         println!("Best match found:");
         println!("  Score: {:.2}", result.score);
-        println!("  Item: {}", result.item);
+        println!("  Candidate: {}", result.candidate);
         println!("  Exact: {}", result.exact);
     } else {
         println!("No match found above threshold");

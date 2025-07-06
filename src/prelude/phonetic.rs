@@ -23,7 +23,7 @@ impl SoundexScorer {
     /// Creates a new SoundexScorer with custom settings
     pub fn new(max_compare_length: usize, international_mode: bool) -> Self {
         SoundexScorer {
-            max_compare_length: max_compare_length.max(1).min(10), 
+            max_compare_length: max_compare_length.max(1).min(10),
             international_mode,
         }
     }
@@ -63,11 +63,11 @@ impl SoundexScorer {
             if self.international_mode {
                 // Additional international phonetic patterns
                 digit = match c {
-                    'Ñ' | 'Ń' => '5', 
-                    'Ç' => '2',      
+                    'Ñ' | 'Ń' => '5',
+                    'Ç' => '2',
                     'Ø' | 'Ö' => '0',
-                    'Æ' => '0',      
-                    'Ł' => '4',      
+                    'Æ' => '0',
+                    'Ł' => '4',
                     _ => digit,
                 };
             }
@@ -119,18 +119,18 @@ impl SoundexScorer {
 }
 
 impl Scorer<String, String> for SoundexScorer {
-    fn score(&self, query: &String, item: &String) -> f64 {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         // Handle empty strings
-        if query.is_empty() && item.is_empty() {
+        if query.is_empty() && candidate.is_empty() {
             return 1.0;
         }
 
-        if query.is_empty() || item.is_empty() {
+        if query.is_empty() || candidate.is_empty() {
             return 0.0;
         }
 
         let query_soundex = self.soundex(query);
-        let item_soundex = self.soundex(item);
+        let item_soundex = self.soundex(candidate);
 
         if query_soundex == item_soundex {
             return 1.0;
@@ -140,18 +140,18 @@ impl Scorer<String, String> for SoundexScorer {
         self.partial_match_score(&query_soundex, &item_soundex)
     }
 
-    fn exact(&self, query: &String, item: &String) -> bool {
+    fn exact(&self, query: &String, candidate: &String) -> bool {
         // Handle empty strings
-        if query.is_empty() && item.is_empty() {
+        if query.is_empty() && candidate.is_empty() {
             return true;
         }
 
-        if query.is_empty() || item.is_empty() {
+        if query.is_empty() || candidate.is_empty() {
             return false;
         }
 
         let query_soundex = self.soundex(query);
-        let item_soundex = self.soundex(item);
+        let item_soundex = self.soundex(candidate);
 
         query_soundex == item_soundex
     }
@@ -159,39 +159,39 @@ impl Scorer<String, String> for SoundexScorer {
 
 // Add support for string references
 impl Scorer<&str, String> for SoundexScorer {
-    fn score(&self, query: &&str, item: &String) -> f64 {
+    fn score(&self, query: &&str, candidate: &String) -> f64 {
         let query_str = query.to_string();
-        self.score(&query_str, item)
+        self.score(&query_str, candidate)
     }
 
-    fn exact(&self, query: &&str, item: &String) -> bool {
+    fn exact(&self, query: &&str, candidate: &String) -> bool {
         let query_str = query.to_string();
-        self.exact(&query_str, item)
+        self.exact(&query_str, candidate)
     }
 }
 
 impl Scorer<String, &str> for SoundexScorer {
-    fn score(&self, query: &String, item: &&str) -> f64 {
-        let item_str = item.to_string();
+    fn score(&self, query: &String, candidate: &&str) -> f64 {
+        let item_str = candidate.to_string();
         self.score(query, &item_str)
     }
 
-    fn exact(&self, query: &String, item: &&str) -> bool {
-        let item_str = item.to_string();
+    fn exact(&self, query: &String, candidate: &&str) -> bool {
+        let item_str = candidate.to_string();
         self.exact(query, &item_str)
     }
 }
 
 impl Scorer<&str, &str> for SoundexScorer {
-    fn score(&self, query: &&str, item: &&str) -> f64 {
+    fn score(&self, query: &&str, candidate: &&str) -> f64 {
         let query_str = query.to_string();
-        let item_str = item.to_string();
+        let item_str = candidate.to_string();
         self.score(&query_str, &item_str)
     }
 
-    fn exact(&self, query: &&str, item: &&str) -> bool {
+    fn exact(&self, query: &&str, candidate: &&str) -> bool {
         let query_str = query.to_string();
-        let item_str = item.to_string();
+        let item_str = candidate.to_string();
         self.exact(&query_str, &item_str)
     }
 }

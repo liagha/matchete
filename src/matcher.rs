@@ -1,13 +1,13 @@
 use core::fmt::Debug;
-use crate::{Scorer, Weight, Detail, Result, Kind};
+use crate::{Scorer, Weight, Detail, Product, Kind};
 
-pub struct Matcher<Query, Item> {
-    scorers: Vec<Box<dyn Scorer<Query, Item>>>,
+pub struct Matcher<Query, Candidate> {
+    scorers: Vec<Box<dyn Scorer<Query, Candidate>>>,
     weights: Vec<Weight>,
     threshold: f64,
 }
 
-impl<Query, Item> Matcher<Query, Item> {
+impl<Query, Candidate> Matcher<Query, Candidate> {
     pub fn new() -> Self {
         Self {
             scorers: Vec::new(),
@@ -21,7 +21,7 @@ impl<Query, Item> Matcher<Query, Item> {
         self
     }
 
-    pub fn add<S: Scorer<Query, Item> + 'static, N: Into<String>>(
+    pub fn add<S: Scorer<Query, Candidate> + 'static, N: Into<String>>(
         mut self,
         scorer: S,
         weight: f64,
@@ -36,15 +36,15 @@ impl<Query, Item> Matcher<Query, Item> {
     }
 }
 
-impl<Query, Item> Matcher<Query, Item>
+impl<Query, Candidate> Matcher<Query, Candidate>
 where
     Query: Clone + Debug,
-    Item: Clone + Debug,
+    Candidate: Clone + Debug,
 {
-    pub fn score(&self, query: &Query, item: &Item) -> f64 {
+    pub fn score(&self, query: &Query, candidate: &Candidate) -> f64 {
         let total_weighted: f64 = self.scorers.iter()
             .zip(&self.weights)
-            .map(|(scorer, weight)| scorer.score(query, item) * weight.value)
+            .map(|(scorer, weight)| scorer.score(query, candidate) * weight.value)
             .sum();
 
         let total_weight: f64 = self.weights.iter().map(|w| w.value).sum();
@@ -56,58 +56,58 @@ where
         }
     }
 
-    pub fn exact(&self, query: &Query, item: &Item) -> bool {
-        self.scorers.iter().any(|scorer| scorer.exact(query, item))
+    pub fn exact(&self, query: &Query, candidate: &Candidate) -> bool {
+        self.scorers.iter().any(|scorer| scorer.exact(query, candidate))
     }
 
-    pub fn kind(&self, query: &Query, item: &Item) -> Kind {
-        if self.exact(query, item) {
+    pub fn kind(&self, query: &Query, candidate: &Candidate) -> Kind {
+        if self.exact(query, candidate) {
             Kind::Exact
-        } else if self.score(query, item) >= self.threshold {
+        } else if self.score(query, candidate) >= self.threshold {
             Kind::Similar
         } else {
             Kind::None
         }
     }
 
-    pub fn details(&self, query: &Query, item: &Item) -> Vec<Detail> {
+    pub fn details(&self, query: &Query, candidate: &Candidate) -> Vec<Detail> {
         self.scorers.iter()
             .zip(&self.weights)
             .map(|(scorer, weight)| {
-                let score = scorer.score(query, item);
+                let score = scorer.score(query, candidate);
                 Detail::new(score, weight.clone())
             })
             .collect()
     }
 
-    pub fn result(&self, query: &Query, item: &Item) -> Result<Query, Item> {
-        let details = self.details(query, item);
-        let score = self.score(query, item);
-        let exact = self.exact(query, item);
+    pub fn result(&self, query: &Query, candidate: &Candidate) -> Product<Query, Candidate> {
+        let details = self.details(query, candidate);
+        let score = self.score(query, candidate);
+        let exact = self.exact(query, candidate);
 
-        Result {
+        Product {
             query: query.clone(),
-            item: item.clone(),
+            candidate: candidate.clone(),
             score,
             exact,
             details,
         }
     }
 
-    pub fn matches(&self, query: &Query, item: &Item) -> bool {
-        !matches!(self.kind(query, item), Kind::None)
+    pub fn matches(&self, query: &Query, candidate: &Candidate) -> bool {
+        !matches!(self.kind(query, candidate), Kind::None)
     }
 
-    pub fn best(&self, query: &Query, items: &[Item]) -> Option<Result<Query, Item>> {
+    pub fn best(&self, query: &Query, items: &[Candidate]) -> Option<Product<Query, Candidate>> {
         items.iter()
-            .map(|item| self.result(query, item))
+            .map(|candidate| self.result(query, candidate))
             .filter(|result| result.exact || result.score >= self.threshold)
             .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
     }
 
-    pub fn find(&self, query: &Query, items: &[Item]) -> Vec<Result<Query, Item>> {
-        let mut results: Vec<Result<Query, Item>> = items.iter()
-            .map(|item| self.result(query, item))
+    pub fn find(&self, query: &Query, items: &[Candidate]) -> Vec<Product<Query, Candidate>> {
+        let mut results: Vec<Product<Query, Candidate>> = items.iter()
+            .map(|candidate| self.result(query, candidate))
             .filter(|result| result.exact || result.score >= self.threshold)
             .collect();
 
@@ -115,7 +115,7 @@ where
         results
     }
 
-    pub fn limit(&self, query: &Query, items: &[Item], limit: usize) -> Vec<Result<Query, Item>> {
+    pub fn limit(&self, query: &Query, items: &[Candidate], limit: usize) -> Vec<Product<Query, Candidate>> {
         let mut results = self.find(query, items);
         results.truncate(limit);
         results

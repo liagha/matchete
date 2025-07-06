@@ -1,10 +1,10 @@
 use core::fmt::Debug;
 
-pub trait Scorer<Query, Item>: Debug {
-    fn score(&self, query: &Query, item: &Item) -> f64;
+pub trait Scorer<Query, Candidate>: Debug {
+    fn score(&self, query: &Query, candidate: &Candidate) -> f64;
 
-    fn exact(&self, query: &Query, item: &Item) -> bool {
-        self.score(query, item) >= 0.9999
+    fn exact(&self, query: &Query, candidate: &Candidate) -> bool {
+        self.score(query, candidate) >= 0.9999
     }
 }
 
@@ -29,9 +29,9 @@ impl Detail {
 }
 
 #[derive(Debug, Clone)]
-pub struct Result<Query, Item> {
+pub struct Product<Query, Candidate> {
     pub query: Query,
-    pub item: Item,
+    pub candidate: Candidate,
     pub score: f64,
     pub exact: bool,
     pub details: Vec<Detail>,

@@ -4,14 +4,14 @@ use matchete::{Matcher, Scorer};
 struct LevenshteinScorer;
 
 impl Scorer<String, String> for LevenshteinScorer {
-    fn score(&self, query: &String, item: &String) -> f64 {
-        let distance = levenshtein_distance(query, item);
-        let max_len = query.len().max(item.len());
+    fn score(&self, query: &String, candidate: &String) -> f64 {
+        let distance = levenshtein_distance(query, candidate);
+        let max_len = query.len().max(candidate.len());
         if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) }
     }
 
-    fn exact(&self, query: &String, item: &String) -> bool {
-        query == item
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
     }
 }
 
@@ -19,9 +19,9 @@ impl Scorer<String, String> for LevenshteinScorer {
 struct JaccardScorer;
 
 impl Scorer<String, String> for JaccardScorer {
-    fn score(&self, query: &String, item: &String) -> f64 {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_chars: std::collections::HashSet<char> = query.chars().collect();
-        let item_chars: std::collections::HashSet<char> = item.chars().collect();
+        let item_chars: std::collections::HashSet<char> = candidate.chars().collect();
 
         let intersection = query_chars.intersection(&item_chars).count();
         let union = query_chars.union(&item_chars).count();
@@ -29,8 +29,8 @@ impl Scorer<String, String> for JaccardScorer {
         if union == 0 { 1.0 } else { intersection as f64 / union as f64 }
     }
 
-    fn exact(&self, query: &String, item: &String) -> bool {
-        query == item
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
     }
 }
 
@@ -65,17 +65,17 @@ fn main() {
         .threshold(0.5);
 
     let query = String::from("test");
-    let item = String::from("tent");
+    let candidate = String::from("tent");
 
     println!("Detailed Analysis Example");
     println!("========================");
 
-    let result = matcher.result(&query, &item);
+    let result = matcher.result(&query, &candidate);
     println!("Query: {}", result.query);
-    println!("Item: {}", result.item);
+    println!("Candidate: {}", result.candidate);
     println!("Overall score: {:.2}", result.score);
     println!("Exact match: {}", result.exact);
-    println!("Is match: {}", matcher.matches(&query, &item));
+    println!("Is match: {}", matcher.matches(&query, &candidate));
     println!("Individual scorer details:");
 
     for (i, detail) in result.details.iter().enumerate() {
