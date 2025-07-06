@@ -8,7 +8,7 @@ use {
     },
 
     crate::{
-        DetailedMatchResult, MatchResult, MatchType,
+        DetailedMatchResult, Product, MatchType,
         MatcherConfig, MetricScore, SimilarityMetric,
         common::WeightedMetric,
         composite::{
@@ -164,7 +164,7 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
     }
 
     /// Find best match for query among candidates
-    pub fn find_best_match(&self, query: &Q, candidates: &[C]) -> Option<MatchResult<Q, C>> {
+    pub fn find_best_match(&self, query: &Q, candidates: &[C]) -> Option<Product<Q, C>> {
         if candidates.is_empty() {
             return None;
         }
@@ -172,7 +172,7 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
         candidates.iter()
             .map(|candidate| {
                 let result = self.analyze(query, candidate);
-                MatchResult {
+                Product {
                     score: result.score,
                     query: query.clone(),
                     candidate: candidate.clone(),
@@ -184,14 +184,14 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
     }
 
     /// Find all matches above threshold
-    pub fn find_matches(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<MatchResult<Q, C>> {
+    pub fn find_matches(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<Product<Q, C>> {
         let mut matches = Vec::new();
 
         for candidate in candidates {
             let result = self.analyze(query, candidate);
 
             if result.is_match {
-                matches.push(MatchResult {
+                matches.push(Product {
                     score: result.score,
                     query: query.clone(),
                     candidate: candidate.clone(),
@@ -210,7 +210,7 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
     }
 
     /// Find matches above a specific threshold
-    pub fn find_matches_by_threshold(&self, query: &Q, candidates: &[C], threshold: f64) -> Vec<MatchResult<Q, C>> {
+    pub fn find_matches_by_threshold(&self, query: &Q, candidates: &[C], threshold: f64) -> Vec<Product<Q, C>> {
         let actual_threshold = threshold.max(self.config.threshold);
 
         let mut matches = Vec::new();
@@ -219,7 +219,7 @@ impl<Q: Clone + Debug, C: Clone + Debug> Matcher<Q, C> {
             let result = self.analyze(query, candidate);
 
             if result.score >= actual_threshold {
-                matches.push(MatchResult {
+                matches.push(Product {
                     score: result.score,
                     query: query.clone(),
                     candidate: candidate.clone(),
@@ -280,7 +280,7 @@ impl<Q: Clone + Debug, C: Clone + Debug + PartialEq> MultiMatcher<Q, C> {
     }
 
     /// Find best match across all matchers
-    pub fn find_best_match(&self, query: &Q, candidates: &[C]) -> Option<MatchResult<Q, C>> {
+    pub fn find_best_match(&self, query: &Q, candidates: &[C]) -> Option<Product<Q, C>> {
         if candidates.is_empty() || self.matchers.is_empty() {
             return None;
         }
@@ -301,7 +301,7 @@ impl<Q: Clone + Debug, C: Clone + Debug + PartialEq> MultiMatcher<Q, C> {
     }
 
     /// Find all matches across all matchers
-    pub fn find_matches(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<MatchResult<Q, C>> {
+    pub fn find_matches(&self, query: &Q, candidates: &[C], limit: usize) -> Vec<Product<Q, C>> {
         if candidates.is_empty() || self.matchers.is_empty() {
             return Vec::new();
         }

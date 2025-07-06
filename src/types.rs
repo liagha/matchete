@@ -5,7 +5,7 @@ use {
 
 /// Represents a match result with score and type information
 #[derive(Debug, Clone)]
-pub struct MatchResult<Q, C> {
+pub struct Product<Q, C> {
     pub score: f64,
     pub query: Q,
     pub candidate: C,

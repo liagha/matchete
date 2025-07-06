@@ -5,8 +5,11 @@
 /// ```bash
 /// cargo run --example multimetric
 /// ```
-use matchete::{MatcherBuilder, MatchType};
-use common::{SimpleLevenshteinMetric, JaccardMetric};
+use matchete::{
+    MatcherBuilder,
+    SimpleLevenshteinMetric,
+    JaccardMetric,
+};
 
 fn main() {
     // Build a matcher with multiple metrics and a conditional threshold
@@ -40,6 +43,3 @@ fn main() {
         );
     }
 }
-
-// Ensure the common module is accessible
-mod common;

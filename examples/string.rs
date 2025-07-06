@@ -5,8 +5,10 @@
 /// ```bash
 /// cargo run --example string
 /// ```
-use matchete::{Matcher, MatchType};
-use common::SimpleLevenshteinMetric;
+use matchete::{
+    Matcher,
+    SimpleLevenshteinMetric,
+};
 
 fn main() {
     // Create a matcher with a single metric and a threshold
@@ -34,6 +36,3 @@ fn main() {
         println!("No match found above threshold");
     }
 }
-
-// Ensure the common module is accessible
-mod common;

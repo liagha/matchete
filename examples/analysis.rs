@@ -5,8 +5,12 @@
 /// ```bash
 /// cargo run --example detailed_analysis
 /// ```
-use matchete::{Matcher, DetailedMatchResult, MatchType};
-use common::{SimpleLevenshteinMetric, JaccardMetric};
+use matchete::{
+    Matcher, 
+    DetailedMatchResult,
+    JaccardMetric,
+    SimpleLevenshteinMetric, 
+};
 
 fn main() {
     // Create a matcher with two metrics
@@ -36,6 +40,3 @@ fn main() {
         );
     }
 }
-
-// Ensure the common module is accessible
-mod common;

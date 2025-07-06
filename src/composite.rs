@@ -1,6 +1,14 @@
-use core::fmt::Debug;
-use crate::{SimilarityMetric, MatchType};
-use core::marker::PhantomData;
+#![allow(dead_code)]
+
+use {
+    core::{
+        fmt::Debug,
+        marker::PhantomData,
+    },
+    crate::{
+        SimilarityMetric, MatchType
+    },
+};
 
 /// Strategy for combining multiple metrics
 #[derive(Debug)]

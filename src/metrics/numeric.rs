@@ -1,4 +1,10 @@
-use crate::common::SimilarityMetric;
+#![allow(dead_code)]
+
+use {
+    crate::{
+        common::SimilarityMetric
+    }
+};
 
 #[derive(Debug)]
 pub struct NumericProximityMetric {

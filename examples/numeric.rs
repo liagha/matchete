@@ -5,8 +5,10 @@
 /// ```bash
 /// cargo run --example numeric_matching
 /// ```
-use matchete::{Matcher, MatchType};
-use common::NumericSimilarity;
+use matchete::{
+    Matcher,
+    NumericSimilarity
+};
 
 fn main() {
     // Create a matcher for f64 numbers
@@ -30,6 +32,3 @@ fn main() {
         );
     }
 }
-
-// Ensure the common module is accessible
-mod common;
