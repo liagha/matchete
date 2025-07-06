@@ -1,31 +1,39 @@
-use matchete::{Matcher, Custom};
+use std::fmt::{Debug, Formatter};
+use matchete::{Matcher, Scorer};
+
+#[derive(Debug)]
+struct NumericScorer;
+
+impl Scorer<f64, f64> for NumericScorer {
+    fn score(&self, query: &f64, item: &f64) -> f64 {
+        let diff = (query - item).abs();
+        let max_val = query.abs().max(item.abs());
+        if max_val == 0.0 { 1.0 } else { 1.0 - (diff / (max_val + 1.0)) }
+    }
+
+    fn exact(&self, query: &f64, item: &f64) -> bool {
+        (query - item).abs() < f64::EPSILON
+    }
+}
 
 fn main() {
-    // Create a numeric similarity metric
-    let numeric_metric = Custom::new(|query: &f64, candidate: &f64| {
-        let diff = (query - candidate).abs();
-        let max_val = query.abs().max(candidate.abs());
-        if max_val == 0.0 { 1.0 } else { 1.0 - (diff / (max_val + 1.0)) }
-    });
-
-    // Create a matcher for f64 numbers
     let matcher = Matcher::<f64, f64>::new()
-        .add(numeric_metric, 1.0)
+        .add(NumericScorer, 1.0, "numeric")
         .threshold(0.8);
 
-    // Define the query and candidate numbers
     let query = 42.0;
     let candidates = vec![40.0, 45.0, 100.0];
 
-    // Find all matches
     println!("Numeric Matching Example");
     println!("=======================");
+
     let matches = matcher.find(&query, &candidates);
     println!("Matches found: {}", matches.len());
-    for (i, m) in matches.iter().enumerate() {
-        println!(
-            "Match {}:\n  Score: {:.2}\n  Candidate: {}\n  Exact: {}",
-            i + 1, m.score, m.candidate, m.exact
-        );
+
+    for (i, result) in matches.iter().enumerate() {
+        println!("Match {}:", i + 1);
+        println!("  Score: {:.2}", result.score);
+        println!("  Item: {}", result.item);
+        println!("  Exact: {}", result.exact);
     }
 }

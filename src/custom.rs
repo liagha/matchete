@@ -1,44 +1,36 @@
-#![allow(dead_code)]
+use core::{fmt::Debug, marker::PhantomData};
+use crate::Scorer;
 
-use {
-    core::{
-        fmt::Debug,
-        marker::PhantomData,
-    },
-    crate::{
-        SimilarityMetric,
-    }
-};
-
-/// Closure-based similarity metric
-#[derive(Debug)]
-pub struct ClosureMetric<Q: Debug, C: Debug, F: Debug>
-where
-    F: Fn(&Q, &C) -> f64, Q: Debug, C: Debug, F: Debug,
-{
-    id: String,
-    calculate_fn: F,
-    _phantom: PhantomData<(Q, C)>,
+pub struct Custom<Query, Item, F> {
+    name: String,
+    func: F,
+    phantom: PhantomData<(Query, Item)>,
 }
 
-impl<Q, C, F> ClosureMetric<Q, C, F>
+impl<Query, Item, F> Custom<Query, Item, F>
 where
-    F: Fn(&Q, &C) -> f64, Q: Debug, C: Debug, F: Debug,
+    F: Fn(&Query, &Item) -> f64,
 {
-    pub fn new<S: Into<String>>(id: S, calculate_fn: F) -> Self {
+    pub fn new<N: Into<String>>(name: N, func: F) -> Self {
         Self {
-            id: id.into(),
-            calculate_fn,
-            _phantom: PhantomData,
+            name: name.into(),
+            func,
+            phantom: PhantomData,
         }
     }
 }
 
-impl<Q, C, F> SimilarityMetric<Q, C> for ClosureMetric<Q, C, F>
+impl<Query, Item, F> Debug for Custom<Query, Item, F> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Custom({})", self.name)
+    }
+}
+
+impl<Query, Item, F> Scorer<Query, Item> for Custom<Query, Item, F>
 where
-    F: Fn(&Q, &C) -> f64, Q: Debug, C: Debug, F: Debug,
+    F: Fn(&Query, &Item) -> f64,
 {
-    fn calculate(&self, query: &Q, candidate: &C) -> f64 {
-        (self.calculate_fn)(query, candidate)
+    fn score(&self, query: &Query, item: &Item) -> f64 {
+        (self.func)(query, item)
     }
 }

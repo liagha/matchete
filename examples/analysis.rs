@@ -1,32 +1,36 @@
-use matchete::{Matcher, Custom, Similarity};
+use matchete::{Matcher, Scorer};
 
-// Levenshtein metric implementation
-struct LevenshteinMetric;
+#[derive(Debug)]
+struct LevenshteinScorer;
 
-impl Similarity<String, String> for LevenshteinMetric {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
-        let distance = levenshtein_distance(query, candidate);
-        let max_len = query.len().max(candidate.len());
+impl Scorer<String, String> for LevenshteinScorer {
+    fn score(&self, query: &String, item: &String) -> f64 {
+        let distance = levenshtein_distance(query, item);
+        let max_len = query.len().max(item.len());
         if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) }
     }
 
-    fn exact(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
+    fn exact(&self, query: &String, item: &String) -> bool {
+        query == item
     }
 }
 
-// Jaccard metric implementation
-struct JaccardMetric;
+#[derive(Debug)]
+struct JaccardScorer;
 
-impl Similarity<String, String> for JaccardMetric {
-    fn score(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for JaccardScorer {
+    fn score(&self, query: &String, item: &String) -> f64 {
         let query_chars: std::collections::HashSet<char> = query.chars().collect();
-        let candidate_chars: std::collections::HashSet<char> = candidate.chars().collect();
+        let item_chars: std::collections::HashSet<char> = item.chars().collect();
 
-        let intersection = query_chars.intersection(&candidate_chars).count();
-        let union = query_chars.union(&candidate_chars).count();
+        let intersection = query_chars.intersection(&item_chars).count();
+        let union = query_chars.union(&item_chars).count();
 
         if union == 0 { 1.0 } else { intersection as f64 / union as f64 }
+    }
+
+    fn exact(&self, query: &String, item: &String) -> bool {
+        query == item
     }
 }
 
@@ -55,30 +59,29 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 }
 
 fn main() {
-    // Create a matcher with two metrics
     let matcher = Matcher::<String, String>::new()
-        .add(LevenshteinMetric, 0.7) // 70% weight
-        .add(JaccardMetric, 0.3)     // 30% weight
+        .add(LevenshteinScorer, 0.7, "levenshtein")
+        .add(JaccardScorer, 0.3, "jaccard")
         .threshold(0.5);
 
-    // Define the query and candidate
     let query = String::from("test");
-    let candidate = String::from("tent");
+    let item = String::from("tent");
 
-    // Perform detailed analysis
     println!("Detailed Analysis Example");
     println!("========================");
-    let analysis = matcher.analyze(&query, &candidate);
-    println!("Query: {}", analysis.query);
-    println!("Candidate: {}", analysis.candidate);
-    println!("Overall score: {:.2}", analysis.score);
-    println!("Exact match: {}", analysis.exact);
-    println!("Is match: {}", matcher.matches(&query, &candidate));
-    println!("Individual metric scores:");
-    for (i, score) in analysis.scores.iter().enumerate() {
-        println!(
-            "  Metric {}:\n    Raw score: {:.2}\n    Weight: {:.2}\n    Weighted score: {:.2}",
-            i + 1, score.value, score.weight, score.weighted()
-        );
+
+    let result = matcher.result(&query, &item);
+    println!("Query: {}", result.query);
+    println!("Item: {}", result.item);
+    println!("Overall score: {:.2}", result.score);
+    println!("Exact match: {}", result.exact);
+    println!("Is match: {}", matcher.matches(&query, &item));
+    println!("Individual scorer details:");
+
+    for (i, detail) in result.details.iter().enumerate() {
+        println!("  Scorer {}: {}", i + 1, detail.weight.name);
+        println!("    Raw score: {:.2}", detail.score);
+        println!("    Weight: {:.2}", detail.weight.value);
+        println!("    Weighted score: {:.2}", detail.score * detail.weight.value);
     }
 }
