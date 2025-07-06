@@ -4,31 +4,27 @@ use {
         HashMap,
         HashSet
     },
-
     crate::{
-        {
-            common::SimilarityMetric,
-            utils::{
-                damerau_levenshtein_distance, KeyboardLayoutType
-            },
-            MatchType,
+        Scorer,
+        utils::{
+            damerau_levenshtein_distance, KeyboardLayoutType
         }
     }
 };
 
-/// Jaro-Winkler similarity for strings
+/// Jaro-Winkler similarity scorer for strings
 #[derive(Debug)]
-pub struct JaroWinklerSimilarity {
+pub struct JaroWinklerScorer {
     prefix_scale: f64,
 }
 
-impl Default for JaroWinklerSimilarity {
+impl Default for JaroWinklerScorer {
     fn default() -> Self {
         Self { prefix_scale: 0.1 } // Standard prefix scaling factor
     }
 }
 
-impl JaroWinklerSimilarity {
+impl JaroWinklerScorer {
     pub fn new(prefix_scale: f64) -> Self {
         Self { prefix_scale }
     }
@@ -125,8 +121,8 @@ impl JaroWinklerSimilarity {
     }
 }
 
-impl SimilarityMetric<String, String> for JaroWinklerSimilarity {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for JaroWinklerScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let jaro_dist = self.jaro_distance(query, candidate);
 
         // Apply Winkler modification (rewards strings with common prefixes)
@@ -135,21 +131,36 @@ impl SimilarityMetric<String, String> for JaroWinklerSimilarity {
         jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
-/// Cosine similarity for strings using character n-grams
+impl Scorer<&str, String> for JaroWinklerScorer {
+    fn score(&self, query: &&str, candidate: &String) -> f64 {
+        let jaro_dist = self.jaro_distance(query, candidate);
+        let prefix_len = self.get_common_prefix_length(query, candidate);
+        jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
+    }
+
+    fn exact(&self, query: &&str, candidate: &String) -> bool {
+        *query == candidate
+    }
+}
+
+/// Cosine similarity scorer for strings using character n-grams
 #[derive(Debug)]
-pub struct CosineSimilarity {
+pub struct CosineScorer {
     n_gram_size: usize,
 }
 
-impl Default for CosineSimilarity {
+impl Default for CosineScorer {
     fn default() -> Self {
         Self { n_gram_size: 2 } // Default to bigrams
     }
 }
 
-impl CosineSimilarity {
+impl CosineScorer {
     pub fn new(n_gram_size: usize) -> Self {
         Self { n_gram_size: n_gram_size.max(1) }
     }
@@ -175,8 +186,8 @@ impl CosineSimilarity {
     }
 }
 
-impl SimilarityMetric<String, String> for CosineSimilarity {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for CosineScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_n_grams = self.get_n_grams(query);
         let candidate_n_grams = self.get_n_grams(candidate);
 
@@ -204,40 +215,72 @@ impl SimilarityMetric<String, String> for CosineSimilarity {
         }
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
 #[derive(Debug)]
-pub struct ExactMatchMetric;
+pub struct ExactMatchScorer;
 
-#[derive(Debug)]
-pub struct CaseInsensitiveMetric;
-
-impl SimilarityMetric<String, String> for CaseInsensitiveMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
-        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
+impl Scorer<String, String> for ExactMatchScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
+        if query == candidate { 1.0 } else { 0.0 }
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
-impl SimilarityMetric<&str, String> for CaseInsensitiveMetric {
-    fn calculate(&self, query: &&str, candidate: &String) -> f64 {
-        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
+impl Scorer<&str, String> for ExactMatchScorer {
+    fn score(&self, query: &&str, candidate: &String) -> f64 {
+        if *query == candidate { 1.0 } else { 0.0 }
     }
 
-}
-
-impl SimilarityMetric<String, &str> for CaseInsensitiveMetric {
-    fn calculate(&self, query: &String, candidate: &&str) -> f64 {
-        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
+    fn exact(&self, query: &&str, candidate: &String) -> bool {
+        *query == candidate
     }
-
 }
 
 #[derive(Debug)]
-pub struct PrefixMetric;
+pub struct CaseInsensitiveScorer;
 
-impl SimilarityMetric<String, String> for PrefixMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for CaseInsensitiveScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
+        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
+    }
+
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query.to_lowercase() == candidate.to_lowercase()
+    }
+}
+
+impl Scorer<&str, String> for CaseInsensitiveScorer {
+    fn score(&self, query: &&str, candidate: &String) -> f64 {
+        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
+    }
+
+    fn exact(&self, query: &&str, candidate: &String) -> bool {
+        query.to_lowercase() == candidate.to_lowercase()
+    }
+}
+
+impl Scorer<String, &str> for CaseInsensitiveScorer {
+    fn score(&self, query: &String, candidate: &&str) -> f64 {
+        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
+    }
+
+    fn exact(&self, query: &String, candidate: &&str) -> bool {
+        query.to_lowercase() == candidate.to_lowercase()
+    }
+}
+
+#[derive(Debug)]
+pub struct PrefixScorer;
+
+impl Scorer<String, String> for PrefixScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -248,19 +291,13 @@ impl SimilarityMetric<String, String> for PrefixMetric {
         }
     }
 
-
-    fn match_type(&self, query: &String, candidate: &String) -> Option<MatchType> {
-        let score = self.calculate(query, candidate);
-        if score > 0.0 {
-            Some(MatchType::Similar("Prefix".to_string()))
-        } else {
-            None
-        }
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
     }
 }
 
-impl SimilarityMetric<&str, String> for PrefixMetric {
-    fn calculate(&self, query: &&str, candidate: &String) -> f64 {
+impl Scorer<&str, String> for PrefixScorer {
+    fn score(&self, query: &&str, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -271,13 +308,16 @@ impl SimilarityMetric<&str, String> for PrefixMetric {
         }
     }
 
+    fn exact(&self, query: &&str, candidate: &String) -> bool {
+        *query == candidate
+    }
 }
 
 #[derive(Debug)]
-pub struct SuffixMetric;
+pub struct SuffixScorer;
 
-impl SimilarityMetric<String, String> for SuffixMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for SuffixScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -288,13 +328,16 @@ impl SimilarityMetric<String, String> for SuffixMetric {
         }
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
 #[derive(Debug)]
-pub struct SubstringMetric;
+pub struct SubstringScorer;
 
-impl SimilarityMetric<String, String> for SubstringMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for SubstringScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
@@ -305,13 +348,16 @@ impl SimilarityMetric<String, String> for SubstringMetric {
         }
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
 #[derive(Debug)]
-pub struct EditDistanceMetric;
+pub struct EditDistanceScorer;
 
-impl SimilarityMetric<String, String> for EditDistanceMetric {
-    fn calculate(&self, s1: &String, s2: &String) -> f64 {
+impl Scorer<String, String> for EditDistanceScorer {
+    fn score(&self, s1: &String, s2: &String) -> f64 {
         let distance = damerau_levenshtein_distance(s1, s2);
         let max_len = max(s1.len(), s2.len());
 
@@ -322,37 +368,27 @@ impl SimilarityMetric<String, String> for EditDistanceMetric {
         1.0 - (distance as f64 / max_len as f64)
     }
 
+    fn exact(&self, s1: &String, s2: &String) -> bool {
+        s1 == s2
+    }
 }
 
 #[derive(Debug)]
-pub struct TokenSimilarityMetric {
+pub struct TokenSimilarityScorer {
     pub separators: Vec<char>,
 }
 
-impl Default for TokenSimilarityMetric {
+impl Default for TokenSimilarityScorer {
     fn default() -> Self {
-        TokenSimilarityMetric {
+        TokenSimilarityScorer {
             separators: vec!['_', '-', '.', ' '],
         }
     }
 }
 
-impl SimilarityMetric<String, String> for TokenSimilarityMetric {
-    fn calculate(&self, s1: &String, s2: &String) -> f64 {
-        let s1_lower = s1.to_lowercase();
-        let s2_lower = s2.to_lowercase();
-
-        let s1_tokens = self.split_on_separators(&s1_lower);
-        let s2_tokens = self.split_on_separators(&s2_lower);
-
-        self.token_similarity(&s1_tokens, &s2_tokens)
-    }
-
-}
-
-impl TokenSimilarityMetric {
+impl TokenSimilarityScorer {
     pub fn new(separators: Vec<char>) -> Self {
-        TokenSimilarityMetric { separators }
+        TokenSimilarityScorer { separators }
     }
 
     pub fn split_on_separators(&self, s: &str) -> Vec<String> {
@@ -431,23 +467,39 @@ impl TokenSimilarityMetric {
     }
 }
 
+impl Scorer<String, String> for TokenSimilarityScorer {
+    fn score(&self, s1: &String, s2: &String) -> f64 {
+        let s1_lower = s1.to_lowercase();
+        let s2_lower = s2.to_lowercase();
+
+        let s1_tokens = self.split_on_separators(&s1_lower);
+        let s2_tokens = self.split_on_separators(&s2_lower);
+
+        self.token_similarity(&s1_tokens, &s2_tokens)
+    }
+
+    fn exact(&self, s1: &String, s2: &String) -> bool {
+        s1 == s2
+    }
+}
+
 #[derive(Debug)]
-pub struct AcronymMetric {
-    pub token_metric: TokenSimilarityMetric,
+pub struct AcronymScorer {
+    pub token_scorer: TokenSimilarityScorer,
     pub max_acronym_length: usize,
 }
 
-impl Default for AcronymMetric {
+impl Default for AcronymScorer {
     fn default() -> Self {
-        AcronymMetric {
-            token_metric: TokenSimilarityMetric::default(),
+        AcronymScorer {
+            token_scorer: TokenSimilarityScorer::default(),
             max_acronym_length: 5,
         }
     }
 }
 
-impl SimilarityMetric<String, String> for AcronymMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for AcronymScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         if query.len() > self.max_acronym_length {
             return 0.0;
         }
@@ -455,7 +507,7 @@ impl SimilarityMetric<String, String> for AcronymMetric {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
-        let tokens = self.token_metric.split_on_separators(&candidate_lower);
+        let tokens = self.token_scorer.split_on_separators(&candidate_lower);
 
         if tokens.len() < query_lower.len() {
             return 0.0;
@@ -472,43 +524,37 @@ impl SimilarityMetric<String, String> for AcronymMetric {
         0.0
     }
 
-
-    fn match_type(&self, query: &String, candidate: &String) -> Option<MatchType> {
-        let score = self.calculate(query, candidate);
-        if score > 0.0 {
-            Some(MatchType::Similar("Acronym".to_string()))
-        } else {
-            None
-        }
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
     }
 }
 
 #[derive(Debug)]
-pub struct KeyboardProximityMetric {
+pub struct KeyboardProximityScorer {
     pub keyboard_layout: HashMap<char, Vec<char>>,
     pub layout_type: KeyboardLayoutType,
 }
 
-impl Default for KeyboardProximityMetric {
+impl Default for KeyboardProximityScorer {
     fn default() -> Self {
-        KeyboardProximityMetric {
+        KeyboardProximityScorer {
             keyboard_layout: KeyboardLayoutType::Qwerty.get_layout(),
             layout_type: KeyboardLayoutType::Qwerty,
         }
     }
 }
 
-impl KeyboardProximityMetric {
+impl KeyboardProximityScorer {
     pub fn new(layout_type: KeyboardLayoutType) -> Self {
-        KeyboardProximityMetric {
+        KeyboardProximityScorer {
             keyboard_layout: layout_type.get_layout(),
             layout_type,
         }
     }
 }
 
-impl SimilarityMetric<String, String> for KeyboardProximityMetric {
-    fn calculate(&self, s1: &String, s2: &String) -> f64 {
+impl Scorer<String, String> for KeyboardProximityScorer {
+    fn score(&self, s1: &String, s2: &String) -> f64 {
         let s1_lower = s1.to_lowercase();
         let s2_lower = s2.to_lowercase();
 
@@ -552,30 +598,34 @@ impl SimilarityMetric<String, String> for KeyboardProximityMetric {
             base_similarity * (1.0 + 0.3 * keyboard_factor) * length_similarity
         }
     }
+
+    fn exact(&self, s1: &String, s2: &String) -> bool {
+        s1 == s2
+    }
 }
 
 #[derive(Debug)]
-pub struct FuzzySearchMetric {
-    pub token_metric: TokenSimilarityMetric,
+pub struct FuzzySearchScorer {
+    pub token_scorer: TokenSimilarityScorer,
     pub min_token_similarity: f64,
 }
 
-impl Default for FuzzySearchMetric {
+impl Default for FuzzySearchScorer {
     fn default() -> Self {
-        FuzzySearchMetric {
-            token_metric: TokenSimilarityMetric::default(),
+        FuzzySearchScorer {
+            token_scorer: TokenSimilarityScorer::default(),
             min_token_similarity: 0.7,
         }
     }
 }
 
-impl SimilarityMetric<String, String> for FuzzySearchMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for FuzzySearchScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
 
-        let query_tokens = self.token_metric.split_on_separators(&query_lower);
-        let candidate_tokens = self.token_metric.split_on_separators(&candidate_lower);
+        let query_tokens = self.token_scorer.split_on_separators(&query_lower);
+        let candidate_tokens = self.token_scorer.split_on_separators(&candidate_lower);
 
         if query_tokens.is_empty() || candidate_tokens.is_empty() {
             return 0.0;
@@ -613,10 +663,13 @@ impl SimilarityMetric<String, String> for FuzzySearchMetric {
         coverage * avg_similarity * (0.7 + 0.3 * coverage)
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
 #[derive(Debug)]
-pub struct PhoneticMetric {
+pub struct PhoneticScorer {
     pub mode: PhoneticMode,
 }
 
@@ -626,58 +679,17 @@ pub enum PhoneticMode {
     DoubleMetaphone,
 }
 
-impl Default for PhoneticMetric {
+impl Default for PhoneticScorer {
     fn default() -> Self {
-        PhoneticMetric {
+        PhoneticScorer {
             mode: PhoneticMode::Soundex,
         }
     }
 }
 
-impl SimilarityMetric<String, String> for PhoneticMetric {
-    fn calculate(&self, s1: &String, s2: &String) -> f64 {
-        match self.mode {
-            PhoneticMode::Soundex => {
-                let s1_code = self.soundex(s1);
-                let s2_code = self.soundex(s2);
-
-                if s1_code == s2_code {
-                    0.85
-                } else {
-                    let common_prefix_len = s1_code.chars().zip(s2_code.chars())
-                        .take_while(|(c1, c2)| c1 == c2)
-                        .count();
-
-                    if common_prefix_len > 0 {
-                        0.6 * (common_prefix_len as f64 / 4.0)
-                    } else {
-                        0.0
-                    }
-                }
-            },
-            PhoneticMode::DoubleMetaphone => {
-                // Simplified double metaphone implementation
-                if s1.to_lowercase() == s2.to_lowercase() {
-                    return 1.0;
-                }
-
-                // Just use soundex as fallback
-                let s1_code = self.soundex(s1);
-                let s2_code = self.soundex(s2);
-
-                if s1_code == s2_code {
-                    0.8
-                } else {
-                    0.0
-                }
-            }
-        }
-    }
-}
-
-impl PhoneticMetric {
+impl PhoneticScorer {
     pub fn new(mode: PhoneticMode) -> Self {
-        PhoneticMetric { mode }
+        PhoneticScorer { mode }
     }
 
     fn soundex(&self, s: &str) -> String {
@@ -720,19 +732,86 @@ impl PhoneticMetric {
     }
 }
 
-#[derive(Debug)]
-pub struct NGramMetric {
-    pub n: usize,
-}
+impl Scorer<String, String> for PhoneticScorer {
+    fn score(&self, s1: &String, s2: &String) -> f64 {
+        match self.mode {
+            PhoneticMode::Soundex => {
+                let s1_code = self.soundex(s1);
+                let s2_code = self.soundex(s2);
 
-impl Default for NGramMetric {
-    fn default() -> Self {
-        NGramMetric { n: 2 }
+                if s1_code == s2_code {
+                    0.85
+                } else {
+                    let common_prefix_len = s1_code.chars().zip(s2_code.chars())
+                        .take_while(|(c1, c2)| c1 == c2)
+                        .count();
+
+                    if common_prefix_len > 0 {
+                        0.6 * (common_prefix_len as f64 / 4.0)
+                    } else {
+                        0.0
+                    }
+                }
+            },
+            PhoneticMode::DoubleMetaphone => {
+                // Simplified double metaphone implementation
+                if s1.to_lowercase() == s2.to_lowercase() {
+                    return 1.0;
+                }
+
+                // Just use soundex as fallback
+                let s1_code = self.soundex(s1);
+                let s2_code = self.soundex(s2);
+
+                if s1_code == s2_code {
+                    0.8
+                } else {
+                    0.0
+                }
+            }
+        }
+    }
+
+    fn exact(&self, s1: &String, s2: &String) -> bool {
+        s1 == s2
     }
 }
 
-impl SimilarityMetric<String, String> for NGramMetric {
-    fn calculate(&self, s1: &String, s2: &String) -> f64 {
+#[derive(Debug)]
+pub struct NGramScorer {
+    pub n: usize,
+}
+
+impl Default for NGramScorer {
+    fn default() -> Self {
+        NGramScorer { n: 2 }
+    }
+}
+
+impl NGramScorer {
+    pub fn new(n: usize) -> Self {
+        NGramScorer { n }
+    }
+
+    fn generate_ngrams(&self, s: &str) -> Vec<String> {
+        if s.len() < self.n {
+            return vec![s.to_string()];
+        }
+
+        let chars: Vec<char> = s.chars().collect();
+        let mut ngrams = Vec::new();
+
+        for i in 0..=chars.len() - self.n {
+            let ngram: String = chars[i..i + self.n].iter().collect();
+            ngrams.push(ngram);
+        }
+
+        ngrams
+    }
+}
+
+impl Scorer<String, String> for NGramScorer {
+    fn score(&self, s1: &String, s2: &String) -> f64 {
         if s1.is_empty() || s2.is_empty() {
             return if s1.is_empty() && s2.is_empty() { 1.0 } else { 0.0 };
         }
@@ -758,33 +837,14 @@ impl SimilarityMetric<String, String> for NGramMetric {
         (2.0 * intersection as f64) / (s1_ngrams.len() + s2_ngrams.len()) as f64
     }
 
-}
-
-impl NGramMetric {
-    pub fn new(n: usize) -> Self {
-        NGramMetric { n }
-    }
-
-    fn generate_ngrams(&self, s: &str) -> Vec<String> {
-        if s.len() < self.n {
-            return vec![s.to_string()];
-        }
-
-        let chars: Vec<char> = s.chars().collect();
-        let mut ngrams = Vec::new();
-
-        for i in 0..=chars.len() - self.n {
-            let ngram: String = chars[i..i + self.n].iter().collect();
-            ngrams.push(ngram);
-        }
-
-        ngrams
+    fn exact(&self, s1: &String, s2: &String) -> bool {
+        s1 == s2
     }
 }
 
-/// Word overlap similarity using Jaccard similarity with customizable tokenization
+/// Word overlap similarity scorer using Jaccard similarity with customizable tokenization
 #[derive(Debug)]
-pub struct WordOverlapSimilarity {
+pub struct WordOverlapScorer {
     /// Whether to ignore case when comparing words
     ignore_case: bool,
     /// Minimum length of words to consider
@@ -797,7 +857,7 @@ pub struct WordOverlapSimilarity {
     stopwords: HashSet<String>,
 }
 
-impl Default for WordOverlapSimilarity {
+impl Default for WordOverlapScorer {
     fn default() -> Self {
         Self {
             ignore_case: true,
@@ -809,8 +869,9 @@ impl Default for WordOverlapSimilarity {
     }
 }
 
-impl WordOverlapSimilarity {
-    /// Create a new WordOverlapSimilarity with custom settings
+// Remove the duplicate Default implementation and fix the WordOverlapScorer
+impl WordOverlapScorer {
+    /// Create a new WordOverlapScorer with custom settings
     pub fn new(
         ignore_case: bool,
         min_word_length: usize,
@@ -829,7 +890,7 @@ impl WordOverlapSimilarity {
         }
     }
 
-    /// Create a simple WordOverlapSimilarity with just case sensitivity setting
+    /// Create a simple WordOverlapScorer with just case sensitivity setting
     pub fn with_case_sensitivity(ignore_case: bool) -> Self {
         Self {
             ignore_case,
@@ -846,8 +907,6 @@ impl WordOverlapSimilarity {
         };
 
         let mut result = Vec::new();
-
-        // Split by whitespace and custom separators if provided
         let mut current_word = String::new();
 
         for c in normalized.chars() {
@@ -865,7 +924,6 @@ impl WordOverlapSimilarity {
             }
         }
 
-        // Don't forget the last word
         if !current_word.is_empty() {
             self.add_processed_word(&current_word, &mut result);
         }
@@ -875,17 +933,14 @@ impl WordOverlapSimilarity {
 
     /// Process and add a word to the result if it meets criteria
     fn add_processed_word(&self, word: &str, result: &mut Vec<String>) {
-        // Skip words that are too short
         if word.len() < self.min_word_length {
             return;
         }
 
-        // Skip stopwords
         if self.stopwords.contains(word) {
             return;
         }
 
-        // Apply stemming if enabled
         let processed = if self.use_stemming {
             self.apply_stemming(word)
         } else {
@@ -897,12 +952,8 @@ impl WordOverlapSimilarity {
 
     /// Apply basic stemming (very simplified Porter stemming)
     fn apply_stemming(&self, word: &str) -> String {
-        // This is a very simplified version of stemming
-        // In a real implementation, you would use a proper stemming algorithm
-
         let mut result = word.to_string();
 
-        // Remove common English suffixes
         for suffix in &["ing", "ed", "s", "es", "ies"] {
             if result.ends_with(suffix) && result.len() > suffix.len() + 2 {
                 result.truncate(result.len() - suffix.len());
@@ -923,13 +974,11 @@ impl WordOverlapSimilarity {
             return 0.0;
         }
 
-        // Count common words with position-based weighting
         let mut common_weight = 0.0;
 
         for (i, q_word) in query_words.iter().enumerate() {
             for (j, c_word) in candidate_words.iter().enumerate() {
                 if q_word == c_word {
-                    // Words that appear in similar positions get higher weight
                     let position_factor = 1.0 - (i as f64 - j as f64).abs() /
                         (query_words.len().max(candidate_words.len()) as f64);
 
@@ -939,14 +988,13 @@ impl WordOverlapSimilarity {
             }
         }
 
-        // Modified Jaccard similarity: weighted_intersection / union
         let union_size = query_words.len() + candidate_words.len() - common_weight as usize;
         common_weight / union_size as f64
     }
 }
 
-impl SimilarityMetric<String, String> for WordOverlapSimilarity {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
+impl Scorer<String, String> for WordOverlapScorer {
+    fn score(&self, query: &String, candidate: &String) -> f64 {
         let query_words = self.get_words(query);
         let candidate_words = self.get_words(candidate);
 
@@ -960,7 +1008,6 @@ impl SimilarityMetric<String, String> for WordOverlapSimilarity {
 
         // Use standard Jaccard similarity for simple cases
         if query_words.len() <= 2 || candidate_words.len() <= 2 {
-            // Count common words
             let mut common_words = 0;
             for q_word in &query_words {
                 if candidate_words.contains(q_word) {
@@ -968,150 +1015,36 @@ impl SimilarityMetric<String, String> for WordOverlapSimilarity {
                 }
             }
 
-            // Jaccard similarity: |A ∩ B| / |A ∪ B|
             let union_size = query_words.len() + candidate_words.len() - common_words;
             common_words as f64 / union_size as f64
         } else {
-            // Use position-aware weighted Jaccard for longer texts
             self.weighted_jaccard(&query_words, &candidate_words)
         }
     }
 
+    fn exact(&self, query: &String, candidate: &String) -> bool {
+        query == candidate
+    }
 }
 
-// Support for string references
-impl SimilarityMetric<&str, String> for WordOverlapSimilarity {
-    fn calculate(&self, query: &&str, candidate: &String) -> f64 {
+impl Scorer<&str, String> for WordOverlapScorer {
+    fn score(&self, query: &&str, candidate: &String) -> f64 {
         let query_str = query.to_string();
-        self.calculate(&query_str, candidate)
+        self.score(&query_str, candidate)
     }
 
+    fn exact(&self, query: &&str, candidate: &String) -> bool {
+        *query == candidate
+    }
 }
 
-impl SimilarityMetric<String, &str> for WordOverlapSimilarity {
-    fn calculate(&self, query: &String, candidate: &&str) -> f64 {
+impl Scorer<String, &str> for WordOverlapScorer {
+    fn score(&self, query: &String, candidate: &&str) -> f64 {
         let candidate_str = candidate.to_string();
-        self.calculate(query, &candidate_str)
+        self.score(query, &candidate_str)
     }
 
-}
-
-#[derive(Debug)]
-pub struct LevenshteinSimilarity;
-
-impl LevenshteinSimilarity {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    /// Calculates the Levenshtein edit distance between two strings
-    fn levenshtein_distance(&self, s1: &str, s2: &str) -> usize {
-        if s1.is_empty() {
-            return s2.len();
-        }
-        if s2.is_empty() {
-            return s1.len();
-        }
-
-        let s1_chars: Vec<char> = s1.chars().collect();
-        let s2_chars: Vec<char> = s2.chars().collect();
-        let s1_len = s1_chars.len();
-        let s2_len = s2_chars.len();
-
-        // Initialize the matrix
-        let mut matrix = vec![vec![0; s2_len + 1]; s1_len + 1];
-
-        // Fill the first row and column
-        for i in 0..=s1_len {
-            matrix[i][0] = i;
-        }
-        for j in 0..=s2_len {
-            matrix[0][j] = j;
-        }
-
-        // Fill the rest of the matrix
-        for i in 1..=s1_len {
-            for j in 1..=s2_len {
-                let cost = if s1_chars[i - 1] == s2_chars[j - 1] { 0 } else { 1 };
-
-                matrix[i][j] = *[
-                    matrix[i - 1][j] + 1,           // deletion
-                    matrix[i][j - 1] + 1,           // insertion
-                    matrix[i - 1][j - 1] + cost,    // substitution
-                ].iter().min().unwrap();
-            }
-        }
-
-        matrix[s1_len][s2_len]
-    }
-}
-
-impl Default for LevenshteinSimilarity {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
-impl SimilarityMetric<String, String> for LevenshteinSimilarity {
-    fn calculate(&self, s1: &String, s2: &String) -> f64 {
-        let distance = self.levenshtein_distance(s1, s2);
-        let max_len = core::cmp::max(s1.len(), s2.len());
-
-        if max_len == 0 {
-            return 1.0; // Both strings are empty, they're identical
-        }
-
-        // Convert distance to similarity score (0.0 to 1.0)
-        // where 1.0 means identical and 0.0 means completely different
-        1.0 - (distance as f64 / max_len as f64)
-    }
-
-
-    fn match_type(&self, query: &String, candidate: &String) -> Option<MatchType> {
-        let score = self.calculate(query, candidate);
-        if score > 0.7 {
-            Some(MatchType::Similar("Levenshtein".to_string()))
-        } else {
-            None
-        }
-    }
-}
-
-// Support for &str references
-impl SimilarityMetric<&str, String> for LevenshteinSimilarity {
-    fn calculate(&self, query: &&str, candidate: &String) -> f64 {
-        let distance = self.levenshtein_distance(query, candidate);
-        let max_len = core::cmp::max(query.len(), candidate.len());
-
-        if max_len == 0 {
-            return 1.0;
-        }
-
-        1.0 - (distance as f64 / max_len as f64)
-    }
-
-}
-
-impl SimilarityMetric<String, &str> for LevenshteinSimilarity {
-    fn calculate(&self, query: &String, candidate: &&str) -> f64 {
-        let distance = self.levenshtein_distance(query, candidate);
-        let max_len = core::cmp::max(query.len(), candidate.len());
-
-        if max_len == 0 {
-            return 1.0;
-        }
-
-        1.0 - (distance as f64 / max_len as f64)
-    }
-
-}
-
-impl SimilarityMetric<String, String> for ExactMatchMetric {
-    fn calculate(&self, query: &String, candidate: &String) -> f64 {
-        if query == candidate {
-            1.0
-        } else {
-            0.0
-        }
+    fn exact(&self, query: &String, candidate: &&str) -> bool {
+        query == *candidate
     }
 }
