@@ -22,7 +22,7 @@ impl Resemblance<f64, f64> for NumericResembler {
 
 fn main() {
     let assessor = Assessor::<f64, f64>::new()
-        .with(NumericResembler, 1.0)
+        .dimension(NumericResembler, 1.0)
         .floor(0.8);
 
     let query = 42.0;
@@ -57,8 +57,8 @@ fn main() {
     println!("======================");
 
     for candidate in &candidates {
-        let verdict = assessor.verdict(&query, candidate);
+        let profile = assessor.profile(&query, candidate);
         println!("Candidate {}: resemblance={:.2}, disposition={:?}",
-                 candidate, verdict.resemblance, assessor.disposition(&query, candidate));
+                 candidate, profile.resemblance, assessor.disposition(&query, candidate));
     }
 }

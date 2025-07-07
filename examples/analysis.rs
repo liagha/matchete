@@ -60,8 +60,8 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 
 fn main() {
     let assessor = Assessor::<String, String>::new()
-        .with(LevenshteinResembler, 0.7)
-        .with(JaccardResembler, 0.3)
+        .dimension(LevenshteinResembler, 0.7)
+        .dimension(JaccardResembler, 0.3)
         .floor(0.5);
 
     let query = String::from("test");
@@ -70,26 +70,19 @@ fn main() {
     println!("Detailed Analysis Example");
     println!("========================");
 
-    let verdict = assessor.verdict(&query, &candidate);
-    println!("Query: {}", verdict.query);
-    println!("Candidate: {}", verdict.candidate);
-    println!("Overall resemblance: {:.2}", verdict.resemblance);
-    println!("Perfect match: {}", verdict.perfect);
+    let profile = assessor.profile(&query, &candidate);
+    println!("Query: {}", profile.query);
+    println!("Candidate: {}", profile.candidate);
+    println!("Overall resemblance: {:.2}", profile.resemblance);
+    println!("Perfect match: {}", profile.perfect);
     println!("Is viable: {}", assessor.viable(&query, &candidate));
     println!("Disposition: {:?}", assessor.disposition(&query, &candidate));
     println!("Individual resembler facets:");
 
     // Get resembler names using Debug trait
-    let resembler_names: Vec<String> = assessor.resemblers.iter()
+    let resembler_names: Vec<String> = assessor.dimensions.iter()
         .map(|resembler| format!("{:?}", resembler))
         .collect();
-
-    for (i, facet) in verdict.facets.iter().enumerate() {
-        println!("  Resembler {}: {}", i + 1, resembler_names[i]);
-        println!("    Raw resemblance: {:.2}", facet.resemblance);
-        println!("    Influence magnitude: {:.2}", facet.influence.magnitude);
-        println!("    Contribution: {:.2}", facet.contribution);
-    }
 
     // Example of finding best match from multiple candidates
     println!("\nBest Match Example");
@@ -111,7 +104,7 @@ fn main() {
     println!("=================");
 
     let shortlist = assessor.shortlist(&query, &candidates);
-    for (i, verdict) in shortlist.iter().enumerate() {
-        println!("{}. {} (resemblance: {:.2})", i + 1, verdict.candidate, verdict.resemblance);
+    for (i, profile) in shortlist.iter().enumerate() {
+        println!("{}. {} (resemblance: {:.2})", i + 1, profile.candidate, profile.resemblance);
     }
 }

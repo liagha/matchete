@@ -12,38 +12,69 @@ pub trait Resemblance<Query, Candidate>: Debug {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Influence {
-    pub magnitude: f64,
+#[derive(Debug)]
+pub struct Dimension<Query, Candidate> {
+    pub resembler: Box<dyn Resemblance<Query, Candidate>>,
+    pub weight: f64,
 }
 
-impl Influence {
-    pub fn new(magnitude: f64) -> Self {
-        Self { magnitude }
+impl<Query, Candidate> Dimension<Query, Candidate> {
+    pub fn new<R: Resemblance<Query, Candidate> + 'static>(resembler: R, weight: f64) -> Self {
+        Self {
+            resembler: Box::new(resembler),
+            weight,
+        }
+    }
+
+    pub fn measure(&self, query: &Query, candidate: &Candidate) -> Measurement {
+        let resemblance = self.resembler.resemblance(query, candidate);
+        let perfect = self.resembler.perfect(query, candidate);
+        let contribution = resemblance * self.weight;
+
+        Measurement {
+            resemblance,
+            perfect,
+            weight: self.weight,
+            contribution,
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Facet {
+pub struct Measurement {
     pub resemblance: f64,
-    pub influence: Influence,
+    pub perfect: bool,
+    pub weight: f64,
     pub contribution: f64,
 }
 
-impl Facet {
-    pub fn new(resemblance: f64, influence: Influence) -> Self {
-        let contribution = resemblance * influence.magnitude;
-        Self { resemblance, influence, contribution }
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct Verdict<Query, Candidate> {
+pub struct Profile<Query, Candidate> {
     pub query: Query,
     pub candidate: Candidate,
+    pub measurements: Vec<Measurement>,
     pub resemblance: f64,
     pub perfect: bool,
-    pub facets: Vec<Facet>,
+}
+
+impl<Query, Candidate> Profile<Query, Candidate> {
+    pub fn strength(&self) -> f64 {
+        self.resemblance
+    }
+
+    pub fn viable(&self, floor: f64) -> bool {
+        self.perfect || self.resemblance >= floor
+    }
+
+    pub fn disposition(&self, floor: f64) -> Disposition {
+        if self.perfect {
+            Disposition::Perfect
+        } else if self.resemblance >= floor {
+            Disposition::Adequate
+        } else {
+            Disposition::Insufficient
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -54,16 +85,14 @@ pub enum Disposition {
 }
 
 pub struct Assessor<Query, Candidate> {
-    pub resemblers: Vec<Box<dyn Resemblance<Query, Candidate>>>,
-    pub influences: Vec<Influence>,
+    pub dimensions: Vec<Dimension<Query, Candidate>>,
     pub floor: f64,
 }
 
 impl<Query, Candidate> Assessor<Query, Candidate> {
     pub fn new() -> Self {
         Self {
-            resemblers: Vec::new(),
-            influences: Vec::new(),
+            dimensions: Vec::new(),
             floor: 0.4,
         }
     }
@@ -73,13 +102,12 @@ impl<Query, Candidate> Assessor<Query, Candidate> {
         self
     }
 
-    pub fn with<R: Resemblance<Query, Candidate> + 'static>(
+    pub fn dimension<R: Resemblance<Query, Candidate> + 'static>(
         mut self,
         resembler: R,
-        magnitude: f64,
+        weight: f64,
     ) -> Self {
-        self.resemblers.push(Box::new(resembler));
-        self.influences.push(Influence::new(magnitude));
+        self.dimensions.push(Dimension::new(resembler, weight));
         self
     }
 }
@@ -89,83 +117,72 @@ where
     Query: Clone + Debug,
     Candidate: Clone + Debug,
 {
-    pub fn resemblance(&self, query: &Query, candidate: &Candidate) -> f64 {
-        let total_contribution: f64 = self.resemblers.iter()
-            .zip(&self.influences)
-            .map(|(resembler, influence)| resembler.resemblance(query, candidate) * influence.magnitude)
+    pub fn profile(&self, query: &Query, candidate: &Candidate) -> Profile<Query, Candidate> {
+        let measurements: Vec<Measurement> = self.dimensions.iter()
+            .map(|dimension| dimension.measure(query, candidate))
+            .collect();
+
+        let total_contribution: f64 = measurements.iter()
+            .map(|m| m.contribution)
             .sum();
 
-        let total_magnitude: f64 = self.influences.iter().map(|i| i.magnitude).sum();
+        let total_weight: f64 = measurements.iter()
+            .map(|m| m.weight)
+            .sum();
 
-        if total_magnitude > 0.0 {
-            total_contribution / total_magnitude
+        let resemblance = if total_weight > 0.0 {
+            total_contribution / total_weight
         } else {
             0.0
+        };
+
+        let perfect = measurements.iter().any(|m| m.perfect);
+
+        Profile {
+            query: query.clone(),
+            candidate: candidate.clone(),
+            measurements,
+            resemblance,
+            perfect,
         }
+    }
+
+    pub fn resemblance(&self, query: &Query, candidate: &Candidate) -> f64 {
+        self.profile(query, candidate).resemblance
     }
 
     pub fn perfect(&self, query: &Query, candidate: &Candidate) -> bool {
-        self.resemblers.iter().any(|resembler| resembler.perfect(query, candidate))
+        self.profile(query, candidate).perfect
     }
 
     pub fn disposition(&self, query: &Query, candidate: &Candidate) -> Disposition {
-        if self.perfect(query, candidate) {
-            Disposition::Perfect
-        } else if self.resemblance(query, candidate) >= self.floor {
-            Disposition::Adequate
-        } else {
-            Disposition::Insufficient
-        }
-    }
-
-    pub fn facets(&self, query: &Query, candidate: &Candidate) -> Vec<Facet> {
-        self.resemblers.iter()
-            .zip(&self.influences)
-            .map(|(resembler, influence)| {
-                let resemblance = resembler.resemblance(query, candidate);
-                Facet::new(resemblance, influence.clone())
-            })
-            .collect()
-    }
-
-    pub fn verdict(&self, query: &Query, candidate: &Candidate) -> Verdict<Query, Candidate> {
-        let facets = self.facets(query, candidate);
-        let resemblance = self.resemblance(query, candidate);
-        let perfect = self.perfect(query, candidate);
-
-        Verdict {
-            query: query.clone(),
-            candidate: candidate.clone(),
-            resemblance,
-            perfect,
-            facets,
-        }
+        self.profile(query, candidate).disposition(self.floor)
     }
 
     pub fn viable(&self, query: &Query, candidate: &Candidate) -> bool {
-        !matches!(self.disposition(query, candidate), Disposition::Insufficient)
+        self.profile(query, candidate).viable(self.floor)
     }
 
-    pub fn champion(&self, query: &Query, candidates: &[Candidate]) -> Option<Verdict<Query, Candidate>> {
+    pub fn champion(&self, query: &Query, candidates: &[Candidate]) -> Option<Profile<Query, Candidate>> {
         candidates.iter()
-            .map(|candidate| self.verdict(query, candidate))
-            .filter(|verdict| verdict.perfect || verdict.resemblance >= self.floor)
+            .map(|candidate| self.profile(query, candidate))
+            .filter(|profile| profile.viable(self.floor))
             .max_by(|a, b| a.resemblance.partial_cmp(&b.resemblance).unwrap())
     }
 
-    pub fn shortlist(&self, query: &Query, candidates: &[Candidate]) -> Vec<Verdict<Query, Candidate>> {
-        let mut verdicts: Vec<Verdict<Query, Candidate>> = candidates.iter()
-            .map(|candidate| self.verdict(query, candidate))
-            .filter(|verdict| verdict.perfect || verdict.resemblance >= self.floor)
+    pub fn shortlist(&self, query: &Query, candidates: &[Candidate]) -> Vec<Profile<Query, Candidate>> {
+        let mut profiles: Vec<Profile<Query, Candidate>> = candidates.iter()
+            .map(|candidate| self.profile(query, candidate))
+            .filter(|profile| profile.viable(self.floor))
             .collect();
 
-        verdicts.sort_by(|a, b| b.resemblance.partial_cmp(&a.resemblance).unwrap());
-        verdicts
+        profiles.sort_by(|a, b| b.resemblance.partial_cmp(&a.resemblance).unwrap());
+        profiles
     }
 
-    pub fn constrain(&self, query: &Query, candidates: &[Candidate], cap: usize) -> Vec<Verdict<Query, Candidate>> {
-        let mut verdicts = self.shortlist(query, candidates);
-        verdicts.truncate(cap);
-        verdicts
+    pub fn constrain(&self, query: &Query, candidates: &[Candidate], cap: usize) -> Vec<Profile<Query, Candidate>> {
+        let mut profiles = self.shortlist(query, candidates);
+        profiles.truncate(cap);
+        profiles
     }
 }

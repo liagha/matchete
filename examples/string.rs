@@ -42,7 +42,7 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 
 fn main() {
     let assessor = Assessor::<String, String>::new()
-        .with(LevenshteinResembler, 1.0)
+        .dimension(LevenshteinResembler, 1.0)
         .floor(0.6);
 
     let query = String::from("hello");
@@ -70,9 +70,9 @@ fn main() {
     println!("======================");
 
     for candidate in &candidates {
-        let verdict = assessor.verdict(&query, candidate);
+        let profile = assessor.profile(&query, candidate);
         let disposition = assessor.disposition(&query, candidate);
         println!("'{}': resemblance={:.2}, disposition={:?}",
-                 candidate, verdict.resemblance, disposition);
+                 candidate, profile.resemblance, disposition);
     }
 }
