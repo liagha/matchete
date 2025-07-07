@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use {
     core::{
         fmt::Debug,
@@ -12,34 +13,38 @@ pub trait Resemblance<Query, Candidate>: Debug {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Dimension<Query, Candidate> {
-    pub resembler: Box<dyn Resemblance<Query, Candidate>>,
+    pub resembler: Arc<dyn Resemblance<Query, Candidate>>,
     pub weight: f64,
+    pub resemblance: f64,
+    pub perfect: bool,
+    pub contribution: f64,
 }
 
 impl<Query, Candidate> Dimension<Query, Candidate> {
     pub fn new<R: Resemblance<Query, Candidate> + 'static>(resembler: R, weight: f64) -> Self {
         Self {
-            resembler: Box::new(resembler),
+            resembler: Arc::new(resembler),
             weight,
+            resemblance: 0.0,
+            perfect: false,
+            contribution: 0.0,
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct Assessment {
-    pub resemblance: f64,
-    pub perfect: bool,
-    pub weight: f64,
-    pub contribution: f64,
+    pub fn assess(&mut self, query: &Query, candidate: &Candidate) {
+        self.resemblance = self.resembler.resemblance(query, candidate);
+        self.perfect = self.resembler.perfect(query, candidate);
+        self.contribution = self.resemblance * self.weight;
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Profile<Query, Candidate> {
     pub query: Query,
     pub candidate: Candidate,
-    pub assessments: Vec<Assessment>,
+    pub dimensions: Vec<Dimension<Query, Candidate>>,
     pub resemblance: f64,
     pub perfect: bool,
 }
@@ -84,30 +89,21 @@ where
     Candidate: Clone + Debug,
 {
     pub fn profile(&self, query: &Query, candidate: &Candidate) -> Profile<Query, Candidate> {
-        let assessments: Vec<Assessment> = self.dimensions.iter()
-            .map(|dimension| {
-                let resemblance = dimension.resembler.resemblance(query, candidate);
-                let perfect = dimension.resembler.perfect(query, candidate);
-                let contribution = resemblance * dimension.weight;
+        let mut dimensions = self.dimensions.clone();
 
-                Assessment {
-                    resemblance,
-                    perfect,
-                    weight: dimension.weight,
-                    contribution,
-                }
-            })
-            .collect();
+        for dimension in &mut dimensions {
+            dimension.assess(query, candidate);
+        }
 
-        let total_contribution: f64 = assessments.iter().map(|a| a.contribution).sum();
-        let total_weight: f64 = assessments.iter().map(|a| a.weight).sum();
+        let total_contribution: f64 = dimensions.iter().map(|d| d.contribution).sum();
+        let total_weight: f64 = dimensions.iter().map(|d| d.weight).sum();
         let total_resemblance = if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 };
-        let is_perfect = assessments.iter().any(|a| a.perfect);
+        let is_perfect = dimensions.iter().any(|d| d.perfect);
 
         Profile {
             query: query.clone(),
             candidate: candidate.clone(),
-            assessments,
+            dimensions,
             resemblance: total_resemblance,
             perfect: is_perfect,
         }
