@@ -98,7 +98,7 @@ where
         let total_contribution: f64 = dimensions.iter().map(|d| d.contribution).sum();
         let total_weight: f64 = dimensions.iter().map(|d| d.weight).sum();
         let total_resemblance = if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 };
-        let is_perfect = dimensions.iter().any(|d| d.perfect);
+        let is_perfect = dimensions.iter().all(|d| d.perfect);
 
         Profile {
             query: query.clone(),
