@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use {
+    std::sync::Arc,
     core::{
         fmt::Debug,
     },

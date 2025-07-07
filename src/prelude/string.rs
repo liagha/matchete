@@ -11,18 +11,18 @@ use crate::prelude::utils::{
 };
 
 /// Jaro-Winkler similarity scorer for strings
-#[derive(Debug)]
-pub struct JaroWinklerScorer {
+#[derive(Debug, PartialEq)]
+pub struct JaroWinkler {
     prefix_scale: f64,
 }
 
-impl Default for JaroWinklerScorer {
+impl Default for JaroWinkler {
     fn default() -> Self {
         Self { prefix_scale: 0.1 }
     }
 }
 
-impl JaroWinklerScorer {
+impl JaroWinkler {
     pub fn new(prefix_scale: f64) -> Self {
         Self { prefix_scale }
     }
@@ -114,7 +114,7 @@ impl JaroWinklerScorer {
     }
 }
 
-impl Resemblance<String, String> for JaroWinklerScorer {
+impl Resemblance<String, String> for JaroWinkler {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let jaro_dist = self.jaro_distance(query, candidate);
 
@@ -128,7 +128,7 @@ impl Resemblance<String, String> for JaroWinklerScorer {
     }
 }
 
-impl Resemblance<&str, String> for JaroWinklerScorer {
+impl Resemblance<&str, String> for JaroWinkler {
     fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let jaro_dist = self.jaro_distance(query, candidate);
         let prefix_len = self.get_common_prefix_length(query, candidate);
@@ -141,18 +141,18 @@ impl Resemblance<&str, String> for JaroWinklerScorer {
 }
 
 /// Cosine similarity scorer for strings using character n-grams
-#[derive(Debug)]
-pub struct CosineScorer {
+#[derive(Debug, PartialEq)]
+pub struct Cosine {
     n_gram_size: usize,
 }
 
-impl Default for CosineScorer {
+impl Default for Cosine {
     fn default() -> Self {
         Self { n_gram_size: 2 }
     }
 }
 
-impl CosineScorer {
+impl Cosine {
     pub fn new(n_gram_size: usize) -> Self {
         Self { n_gram_size: n_gram_size.max(1) }
     }
@@ -178,7 +178,7 @@ impl CosineScorer {
     }
 }
 
-impl Resemblance<String, String> for CosineScorer {
+impl Resemblance<String, String> for Cosine {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_n_grams = self.get_n_grams(query);
         let candidate_n_grams = self.get_n_grams(candidate);
@@ -210,10 +210,10 @@ impl Resemblance<String, String> for CosineScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct ExactMatchScorer;
+#[derive(Debug, PartialEq)]
+pub struct ExactMatch;
 
-impl Resemblance<String, String> for ExactMatchScorer {
+impl Resemblance<String, String> for ExactMatch {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         if query == candidate { 1.0 } else { 0.0 }
     }
@@ -223,7 +223,7 @@ impl Resemblance<String, String> for ExactMatchScorer {
     }
 }
 
-impl Resemblance<&str, String> for ExactMatchScorer {
+impl Resemblance<&str, String> for ExactMatch {
     fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         if *query == candidate { 1.0 } else { 0.0 }
     }
@@ -233,10 +233,10 @@ impl Resemblance<&str, String> for ExactMatchScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct CaseInsensitiveScorer;
+#[derive(Debug, PartialEq)]
+pub struct CaseInsensitive;
 
-impl Resemblance<String, String> for CaseInsensitiveScorer {
+impl Resemblance<String, String> for CaseInsensitive {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
@@ -246,7 +246,7 @@ impl Resemblance<String, String> for CaseInsensitiveScorer {
     }
 }
 
-impl Resemblance<&str, String> for CaseInsensitiveScorer {
+impl Resemblance<&str, String> for CaseInsensitive {
     fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
@@ -256,7 +256,7 @@ impl Resemblance<&str, String> for CaseInsensitiveScorer {
     }
 }
 
-impl Resemblance<String, &str> for CaseInsensitiveScorer {
+impl Resemblance<String, &str> for CaseInsensitive {
     fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
         if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
     }
@@ -266,10 +266,10 @@ impl Resemblance<String, &str> for CaseInsensitiveScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct PrefixScorer;
+#[derive(Debug, PartialEq)]
+pub struct Prefix;
 
-impl Resemblance<String, String> for PrefixScorer {
+impl Resemblance<String, String> for Prefix {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
@@ -286,7 +286,7 @@ impl Resemblance<String, String> for PrefixScorer {
     }
 }
 
-impl Resemblance<&str, String> for PrefixScorer {
+impl Resemblance<&str, String> for Prefix {
     fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
@@ -303,10 +303,10 @@ impl Resemblance<&str, String> for PrefixScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct SuffixScorer;
+#[derive(Debug, PartialEq)]
+pub struct Suffix;
 
-impl Resemblance<String, String> for SuffixScorer {
+impl Resemblance<String, String> for Suffix {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
@@ -323,10 +323,10 @@ impl Resemblance<String, String> for SuffixScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct SubstringScorer;
+#[derive(Debug, PartialEq)]
+pub struct Substring;
 
-impl Resemblance<String, String> for SubstringScorer {
+impl Resemblance<String, String> for Substring {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
@@ -343,10 +343,10 @@ impl Resemblance<String, String> for SubstringScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct EditDistanceScorer;
+#[derive(Debug, PartialEq)]
+pub struct EditDistance;
 
-impl Resemblance<String, String> for EditDistanceScorer {
+impl Resemblance<String, String> for EditDistance {
     fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         let distance = damerau_levenshtein_distance(s1, s2);
         let max_len = max(s1.len(), s2.len());
@@ -363,22 +363,22 @@ impl Resemblance<String, String> for EditDistanceScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct TokenSimilarityScorer {
+#[derive(Debug, PartialEq)]
+pub struct TokenSimilarity {
     pub separators: Vec<char>,
 }
 
-impl Default for TokenSimilarityScorer {
+impl Default for TokenSimilarity {
     fn default() -> Self {
-        TokenSimilarityScorer {
+        TokenSimilarity {
             separators: vec!['_', '-', '.', ' '],
         }
     }
 }
 
-impl TokenSimilarityScorer {
+impl TokenSimilarity {
     pub fn new(separators: Vec<char>) -> Self {
-        TokenSimilarityScorer { separators }
+        TokenSimilarity { separators }
     }
 
     pub fn split_on_separators(&self, s: &str) -> Vec<String> {
@@ -457,7 +457,7 @@ impl TokenSimilarityScorer {
     }
 }
 
-impl Resemblance<String, String> for TokenSimilarityScorer {
+impl Resemblance<String, String> for TokenSimilarity {
     fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         let s1_lower = s1.to_lowercase();
         let s2_lower = s2.to_lowercase();
@@ -473,22 +473,22 @@ impl Resemblance<String, String> for TokenSimilarityScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct AcronymScorer {
-    pub token_scorer: TokenSimilarityScorer,
+#[derive(Debug, PartialEq)]
+pub struct Acronym {
+    pub token_scorer: TokenSimilarity,
     pub max_acronym_length: usize,
 }
 
-impl Default for AcronymScorer {
+impl Default for Acronym {
     fn default() -> Self {
-        AcronymScorer {
-            token_scorer: TokenSimilarityScorer::default(),
+        Acronym {
+            token_scorer: TokenSimilarity::default(),
             max_acronym_length: 5,
         }
     }
 }
 
-impl Resemblance<String, String> for AcronymScorer {
+impl Resemblance<String, String> for Acronym {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         if query.len() > self.max_acronym_length {
             return 0.0;
@@ -519,31 +519,31 @@ impl Resemblance<String, String> for AcronymScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct KeyboardProximityScorer {
+#[derive(Debug, PartialEq)]
+pub struct KeyboardProximity {
     pub keyboard_layout: HashMap<char, Vec<char>>,
     pub layout_type: KeyboardLayoutType,
 }
 
-impl Default for KeyboardProximityScorer {
+impl Default for KeyboardProximity {
     fn default() -> Self {
-        KeyboardProximityScorer {
+        KeyboardProximity {
             keyboard_layout: KeyboardLayoutType::Qwerty.get_layout(),
             layout_type: KeyboardLayoutType::Qwerty,
         }
     }
 }
 
-impl KeyboardProximityScorer {
+impl KeyboardProximity {
     pub fn new(layout_type: KeyboardLayoutType) -> Self {
-        KeyboardProximityScorer {
+        KeyboardProximity {
             keyboard_layout: layout_type.get_layout(),
             layout_type,
         }
     }
 }
 
-impl Resemblance<String, String> for KeyboardProximityScorer {
+impl Resemblance<String, String> for KeyboardProximity {
     fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         let s1_lower = s1.to_lowercase();
         let s2_lower = s2.to_lowercase();
@@ -594,22 +594,22 @@ impl Resemblance<String, String> for KeyboardProximityScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct FuzzySearchScorer {
-    pub token_scorer: TokenSimilarityScorer,
+#[derive(Debug, PartialEq)]
+pub struct FuzzySearch {
+    pub token_scorer: TokenSimilarity,
     pub min_token_similarity: f64,
 }
 
-impl Default for FuzzySearchScorer {
+impl Default for FuzzySearch {
     fn default() -> Self {
-        FuzzySearchScorer {
-            token_scorer: TokenSimilarityScorer::default(),
+        FuzzySearch {
+            token_scorer: TokenSimilarity::default(),
             min_token_similarity: 0.7,
         }
     }
 }
 
-impl Resemblance<String, String> for FuzzySearchScorer {
+impl Resemblance<String, String> for FuzzySearch {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_lower = query.to_lowercase();
         let candidate_lower = candidate.to_lowercase();
@@ -658,28 +658,28 @@ impl Resemblance<String, String> for FuzzySearchScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct PhoneticScorer {
+#[derive(Debug, PartialEq)]
+pub struct Phonetic {
     pub mode: PhoneticMode,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PhoneticMode {
     Soundex,
     DoubleMetaphone,
 }
 
-impl Default for PhoneticScorer {
+impl Default for Phonetic {
     fn default() -> Self {
-        PhoneticScorer {
+        Phonetic {
             mode: PhoneticMode::Soundex,
         }
     }
 }
 
-impl PhoneticScorer {
+impl Phonetic {
     pub fn new(mode: PhoneticMode) -> Self {
-        PhoneticScorer { mode }
+        Phonetic { mode }
     }
 
     fn soundex(&self, s: &str) -> String {
@@ -722,7 +722,7 @@ impl PhoneticScorer {
     }
 }
 
-impl Resemblance<String, String> for PhoneticScorer {
+impl Resemblance<String, String> for Phonetic {
     fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         match self.mode {
             PhoneticMode::Soundex => {
@@ -766,20 +766,20 @@ impl Resemblance<String, String> for PhoneticScorer {
     }
 }
 
-#[derive(Debug)]
-pub struct NGramScorer {
+#[derive(Debug, PartialEq)]
+pub struct NGram {
     pub n: usize,
 }
 
-impl Default for NGramScorer {
+impl Default for NGram {
     fn default() -> Self {
-        NGramScorer { n: 2 }
+        NGram { n: 2 }
     }
 }
 
-impl NGramScorer {
+impl NGram {
     pub fn new(n: usize) -> Self {
-        NGramScorer { n }
+        NGram { n }
     }
 
     fn generate_ngrams(&self, s: &str) -> Vec<String> {
@@ -799,7 +799,7 @@ impl NGramScorer {
     }
 }
 
-impl Resemblance<String, String> for NGramScorer {
+impl Resemblance<String, String> for NGram {
     fn resemblance(&self, s1: &String, s2: &String) -> f64 {
         if s1.is_empty() || s2.is_empty() {
             return if s1.is_empty() && s2.is_empty() { 1.0 } else { 0.0 };
@@ -832,8 +832,8 @@ impl Resemblance<String, String> for NGramScorer {
 }
 
 /// Word overlap similarity scorer using Jaccard similarity with customizable tokenization
-#[derive(Debug)]
-pub struct WordOverlapScorer {
+#[derive(Debug, PartialEq)]
+pub struct WordOverlap {
     /// Whether to ignore case when comparing words
     ignore_case: bool,
     /// Minimum length of words to consider
@@ -846,7 +846,7 @@ pub struct WordOverlapScorer {
     stopwords: HashSet<String>,
 }
 
-impl Default for WordOverlapScorer {
+impl Default for WordOverlap {
     fn default() -> Self {
         Self {
             ignore_case: true,
@@ -858,7 +858,7 @@ impl Default for WordOverlapScorer {
     }
 }
 
-impl WordOverlapScorer {
+impl WordOverlap {
     pub fn new(
         ignore_case: bool,
         min_word_length: usize,
@@ -877,7 +877,7 @@ impl WordOverlapScorer {
         }
     }
 
-    /// Create a simple WordOverlapScorer with just case sensitivity setting
+    /// Create a simple WordOverlap with just case sensitivity setting
     pub fn with_case_sensitivity(ignore_case: bool) -> Self {
         Self {
             ignore_case,
@@ -980,7 +980,7 @@ impl WordOverlapScorer {
     }
 }
 
-impl Resemblance<String, String> for WordOverlapScorer {
+impl Resemblance<String, String> for WordOverlap {
     fn resemblance(&self, query: &String, candidate: &String) -> f64 {
         let query_words = self.get_words(query);
         let candidate_words = self.get_words(candidate);
@@ -1013,7 +1013,7 @@ impl Resemblance<String, String> for WordOverlapScorer {
     }
 }
 
-impl Resemblance<&str, String> for WordOverlapScorer {
+impl Resemblance<&str, String> for WordOverlap {
     fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
         let query_str = query.to_string();
         self.resemblance(&query_str, candidate)
@@ -1024,7 +1024,7 @@ impl Resemblance<&str, String> for WordOverlapScorer {
     }
 }
 
-impl Resemblance<String, &str> for WordOverlapScorer {
+impl Resemblance<String, &str> for WordOverlap {
     fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
         let candidate_str = candidate.to_string();
         self.resemblance(query, &candidate_str)
