@@ -25,23 +25,10 @@ impl<Query, Candidate> Dimension<Query, Candidate> {
             weight,
         }
     }
-
-    pub fn measure(&self, query: &Query, candidate: &Candidate) -> Measurement {
-        let resemblance = self.resembler.resemblance(query, candidate);
-        let perfect = self.resembler.perfect(query, candidate);
-        let contribution = resemblance * self.weight;
-
-        Measurement {
-            resemblance,
-            perfect,
-            weight: self.weight,
-            contribution,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
-pub struct Measurement {
+pub struct Assessment {
     pub resemblance: f64,
     pub perfect: bool,
     pub weight: f64,
@@ -52,36 +39,15 @@ pub struct Measurement {
 pub struct Profile<Query, Candidate> {
     pub query: Query,
     pub candidate: Candidate,
-    pub measurements: Vec<Measurement>,
+    pub assessments: Vec<Assessment>,
     pub resemblance: f64,
     pub perfect: bool,
 }
 
 impl<Query, Candidate> Profile<Query, Candidate> {
-    pub fn strength(&self) -> f64 {
-        self.resemblance
-    }
-
     pub fn viable(&self, floor: f64) -> bool {
         self.perfect || self.resemblance >= floor
     }
-
-    pub fn disposition(&self, floor: f64) -> Disposition {
-        if self.perfect {
-            Disposition::Perfect
-        } else if self.resemblance >= floor {
-            Disposition::Adequate
-        } else {
-            Disposition::Insufficient
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Disposition {
-    Perfect,
-    Adequate,
-    Insufficient,
 }
 
 pub struct Assessor<Query, Candidate> {
@@ -118,32 +84,32 @@ where
     Candidate: Clone + Debug,
 {
     pub fn profile(&self, query: &Query, candidate: &Candidate) -> Profile<Query, Candidate> {
-        let measurements: Vec<Measurement> = self.dimensions.iter()
-            .map(|dimension| dimension.measure(query, candidate))
+        let assessments: Vec<Assessment> = self.dimensions.iter()
+            .map(|dimension| {
+                let resemblance = dimension.resembler.resemblance(query, candidate);
+                let perfect = dimension.resembler.perfect(query, candidate);
+                let contribution = resemblance * dimension.weight;
+
+                Assessment {
+                    resemblance,
+                    perfect,
+                    weight: dimension.weight,
+                    contribution,
+                }
+            })
             .collect();
 
-        let total_contribution: f64 = measurements.iter()
-            .map(|m| m.contribution)
-            .sum();
-
-        let total_weight: f64 = measurements.iter()
-            .map(|m| m.weight)
-            .sum();
-
-        let resemblance = if total_weight > 0.0 {
-            total_contribution / total_weight
-        } else {
-            0.0
-        };
-
-        let perfect = measurements.iter().any(|m| m.perfect);
+        let total_contribution: f64 = assessments.iter().map(|a| a.contribution).sum();
+        let total_weight: f64 = assessments.iter().map(|a| a.weight).sum();
+        let total_resemblance = if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 };
+        let is_perfect = assessments.iter().any(|a| a.perfect);
 
         Profile {
             query: query.clone(),
             candidate: candidate.clone(),
-            measurements,
-            resemblance,
-            perfect,
+            assessments,
+            resemblance: total_resemblance,
+            perfect: is_perfect,
         }
     }
 
@@ -153,10 +119,6 @@ where
 
     pub fn perfect(&self, query: &Query, candidate: &Candidate) -> bool {
         self.profile(query, candidate).perfect
-    }
-
-    pub fn disposition(&self, query: &Query, candidate: &Candidate) -> Disposition {
-        self.profile(query, candidate).disposition(self.floor)
     }
 
     pub fn viable(&self, query: &Query, candidate: &Candidate) -> bool {

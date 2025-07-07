@@ -60,7 +60,6 @@ fn main() {
         println!("  Resemblance: {:.2}", verdict.resemblance);
         println!("  Candidate: {}", verdict.candidate);
         println!("  Perfect: {}", verdict.perfect);
-        println!("  Disposition: {:?}", assessor.disposition(&query, &verdict.candidate));
     } else {
         println!("No viable candidate found above floor threshold");
     }
@@ -71,8 +70,7 @@ fn main() {
 
     for candidate in &candidates {
         let profile = assessor.profile(&query, candidate);
-        let disposition = assessor.disposition(&query, candidate);
-        println!("'{}': resemblance={:.2}, disposition={:?}",
-                 candidate, profile.resemblance, disposition);
+        println!("'{}': resemblance={:.2}",
+                 candidate, profile.resemblance);
     }
 }

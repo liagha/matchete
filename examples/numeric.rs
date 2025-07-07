@@ -39,7 +39,6 @@ fn main() {
         println!("  Resemblance: {:.2}", verdict.resemblance);
         println!("  Candidate: {}", verdict.candidate);
         println!("  Perfect: {}", verdict.perfect);
-        println!("  Disposition: {:?}", assessor.disposition(&query, &verdict.candidate));
     }
 
     // Show champion example
@@ -58,7 +57,7 @@ fn main() {
 
     for candidate in &candidates {
         let profile = assessor.profile(&query, candidate);
-        println!("Candidate {}: resemblance={:.2}, disposition={:?}",
-                 candidate, profile.resemblance, assessor.disposition(&query, candidate));
+        println!("Candidate {}: resemblance={:.2}",
+                 candidate, profile.resemblance);
     }
 }

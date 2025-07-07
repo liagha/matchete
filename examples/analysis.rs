@@ -76,7 +76,6 @@ fn main() {
     println!("Overall resemblance: {:.2}", profile.resemblance);
     println!("Perfect match: {}", profile.perfect);
     println!("Is viable: {}", assessor.viable(&query, &candidate));
-    println!("Disposition: {:?}", assessor.disposition(&query, &candidate));
     println!("Individual resembler facets:");
 
     // Get resembler names using Debug trait
