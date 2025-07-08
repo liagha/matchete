@@ -40,6 +40,134 @@ impl<Query, Candidate> Dimension<Query, Candidate> {
     }
 }
 
+#[derive(Debug)]
+pub struct Blend<Query, Candidate> {
+    dimensions: Vec<Dimension<Query, Candidate>>,
+    blend_type: BlendType,
+}
+
+#[derive(Debug, Clone)]
+pub enum BlendType {
+    Weighted,
+    Minimum,
+    Maximum,
+    Product,
+}
+
+impl<Query, Candidate> Blend<Query, Candidate> {
+    pub fn weighted(dimensions: Vec<Dimension<Query, Candidate>>) -> Self {
+        Self {
+            dimensions,
+            blend_type: BlendType::Weighted,
+        }
+    }
+
+    pub fn minimum(dimensions: Vec<Dimension<Query, Candidate>>) -> Self {
+        Self {
+            dimensions,
+            blend_type: BlendType::Minimum,
+        }
+    }
+
+    pub fn maximum(dimensions: Vec<Dimension<Query, Candidate>>) -> Self {
+        Self {
+            dimensions,
+            blend_type: BlendType::Maximum,
+        }
+    }
+
+    pub fn product(dimensions: Vec<Dimension<Query, Candidate>>) -> Self {
+        Self {
+            dimensions,
+            blend_type: BlendType::Product,
+        }
+    }
+
+    fn compute_resemblance(&self, resemblances: &[f64], weights: &[f64]) -> f64 {
+        match self.blend_type {
+            BlendType::Weighted => {
+                let total_contribution: f64 = resemblances.iter().zip(weights.iter()).map(|(r, w)| r * w).sum();
+                let total_weight: f64 = weights.iter().sum();
+                if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 }
+            }
+            BlendType::Minimum => resemblances.iter().cloned().fold(f64::INFINITY, f64::min),
+            BlendType::Maximum => resemblances.iter().cloned().fold(0.0, f64::max),
+            BlendType::Product => resemblances.iter().product(),
+        }
+    }
+}
+
+impl<Query, Candidate> Resemblance<Query, Candidate> for Blend<Query, Candidate>
+where
+    Query: Clone + Debug,
+    Candidate: Clone + Debug,
+{
+    fn resemblance(&self, query: &Query, candidate: &Candidate) -> f64 {
+        let mut dimensions = self.dimensions.clone();
+
+        for dimension in &mut dimensions {
+            dimension.assess(query, candidate);
+        }
+
+        let resemblances: Vec<f64> = dimensions.iter().map(|d| d.resemblance).collect();
+        let weights: Vec<f64> = dimensions.iter().map(|d| d.weight).collect();
+
+        self.compute_resemblance(&resemblances, &weights)
+    }
+
+    fn perfect(&self, query: &Query, candidate: &Candidate) -> bool {
+        let mut dimensions = self.dimensions.clone();
+
+        for dimension in &mut dimensions {
+            dimension.assess(query, candidate);
+        }
+
+        match self.blend_type {
+            BlendType::Weighted => dimensions.iter().all(|d| d.perfect),
+            BlendType::Minimum => dimensions.iter().all(|d| d.perfect),
+            BlendType::Maximum => dimensions.iter().any(|d| d.perfect),
+            BlendType::Product => dimensions.iter().all(|d| d.perfect),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Union<Query, Candidate> {
+    resemblers: Vec<Arc<dyn Resemblance<Query, Candidate>>>,
+    weights: Vec<f64>,
+}
+
+impl<Query, Candidate> Union<Query, Candidate> {
+    pub fn new() -> Self {
+        Self {
+            resemblers: Vec::new(),
+            weights: Vec::new(),
+        }
+    }
+
+    pub fn add<R: Resemblance<Query, Candidate> + 'static>(mut self, resembler: R, weight: f64) -> Self {
+        self.resemblers.push(Arc::new(resembler));
+        self.weights.push(weight);
+        self
+    }
+}
+
+impl<Query: Clone + Debug + 'static, Candidate: Clone + Debug + 'static> Resemblance<Query, Candidate> for Union<Query, Candidate> {
+    fn resemblance(&self, query: &Query, candidate: &Candidate) -> f64 {
+        let total_contribution: f64 = self.resemblers.iter()
+            .zip(self.weights.iter())
+            .map(|(resembler, weight)| resembler.resemblance(query, candidate) * weight)
+            .sum();
+
+        let total_weight: f64 = self.weights.iter().sum();
+        if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 }
+    }
+
+    fn perfect(&self, query: &Query, candidate: &Candidate) -> bool {
+        self.resemblers.iter().all(|resembler| resembler.perfect(query, candidate))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile<Query, Candidate> {
     pub query: Query,
@@ -60,7 +188,7 @@ pub struct Assessor<Query, Candidate> {
     pub floor: f64,
 }
 
-impl<Query, Candidate> Assessor<Query, Candidate> {
+impl<Query: Clone + Debug + 'static, Candidate: Clone + Debug + 'static> Assessor<Query, Candidate> {
     pub fn new() -> Self {
         Self {
             dimensions: Vec::new(),
@@ -79,6 +207,16 @@ impl<Query, Candidate> Assessor<Query, Candidate> {
         weight: f64,
     ) -> Self {
         self.dimensions.push(Dimension::new(resembler, weight));
+        self
+    }
+
+    pub fn blend(mut self, blend: Blend<Query, Candidate>, weight: f64) -> Self {
+        self.dimensions.push(Dimension::new(blend, weight));
+        self
+    }
+
+    pub fn union(mut self, union: Union<Query, Candidate>, weight: f64) -> Self {
+        self.dimensions.push(Dimension::new(union, weight));
         self
     }
 }
