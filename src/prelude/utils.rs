@@ -1,6 +1,12 @@
 use {
-    core::cmp::min,
-    hashish::HashMap,
+    core::{
+        cmp::{
+            min,
+        },
+    },
+    hashish::{
+        HashMap,
+    },
 };
 
 pub fn damerau_levenshtein_distance(s1: &str, s2: &str) -> usize {

@@ -1,391 +1,321 @@
 use {
-    crate::Resemblance,
-    core::cmp::{max, min},
+    crate::{
+        assessor::{
+            Resembler,
+            Resemblance,
+            Blend,
+            Dimension,
+        },
+        prelude::{
+            utils::{
+                damerau_levenshtein_distance,
+                KeyboardLayoutType,
+            }
+        }
+    },
+    core::{
+        cmp::{max, min}
+    },
     hashish::{
         HashMap,
-        HashSet
-    }
-};
-use crate::prelude::utils::{
-    damerau_levenshtein_distance, KeyboardLayoutType
+        HashSet,
+    },
 };
 
-/// Jaro-Winkler similarity scorer for strings
 #[derive(Debug, PartialEq)]
 pub struct JaroWinkler {
-    prefix_scale: f64,
+    prefix_weight: f64,
 }
 
 impl Default for JaroWinkler {
     fn default() -> Self {
-        Self { prefix_scale: 0.1 }
+        Self { prefix_weight: 0.1 }
     }
 }
 
 impl JaroWinkler {
-    pub fn new(prefix_scale: f64) -> Self {
-        Self { prefix_scale }
+    pub fn new(prefix_weight: f64) -> Self {
+        Self { prefix_weight }
     }
 
-    fn jaro_distance(&self, s1: &str, s2: &str) -> f64 {
-        let s1_len = s1.chars().count();
-        let s2_len = s2.chars().count();
+    fn compute_jaro(&self, str1: &str, str2: &str) -> f64 {
+        let len1 = str1.chars().count();
+        let len2 = str2.chars().count();
 
-        if s1_len == 0 && s2_len == 0 {
-            return 1.0;
-        }
+        if len1 == 0 && len2 == 0 { return 1.0; }
+        if len1 == 0 || len2 == 0 { return 0.0; }
 
-        if s1_len == 0 || s2_len == 0 {
-            return 0.0;
-        }
+        let match_range = max(len1, len2) / 2 - 1;
+        let chars1: Vec<char> = str1.chars().collect();
+        let chars2: Vec<char> = str2.chars().collect();
+        let mut matches1 = vec![false; len1];
+        let mut matches2 = vec![false; len2];
+        let mut match_count = 0;
 
-        let match_distance = (s1_len.max(s2_len) / 2).max(1) - 1;
-
-        let s1_chars: Vec<char> = s1.chars().collect();
-        let s2_chars: Vec<char> = s2.chars().collect();
-
-        let mut s1_matches = vec![false; s1_len];
-        let mut s2_matches = vec![false; s2_len];
-
-        let mut matches = 0;
-        for i in 0..s1_len {
-            let start = i.saturating_sub(match_distance).max(0);
-            let end = (i + match_distance + 1).min(s2_len);
+        for i in 0..len1 {
+            let start = i.saturating_sub(match_range).max(0);
+            let end = min(i + match_range + 1, len2);
 
             for j in start..end {
-                if !s2_matches[j] && s1_chars[i] == s2_chars[j] {
-                    s1_matches[i] = true;
-                    s2_matches[j] = true;
-                    matches += 1;
+                if !matches2[j] && chars1[i] == chars2[j] {
+                    matches1[i] = true;
+                    matches2[j] = true;
+                    match_count += 1;
                     break;
                 }
             }
         }
 
-        if matches == 0 {
-            return 0.0;
-        }
+        if match_count == 0 { return 0.0; }
 
         let mut transpositions = 0;
         let mut k = 0;
-
-        for i in 0..s1_len {
-            if s1_matches[i] {
-                while !s2_matches[k] {
-                    k += 1;
-                }
-
-                if s1_chars[i] != s2_chars[k] {
-                    transpositions += 1;
-                }
-
+        for i in 0..len1 {
+            if matches1[i] {
+                while !matches2[k] { k += 1; }
+                if chars1[i] != chars2[k] { transpositions += 1; }
                 k += 1;
             }
         }
 
-        let m = matches as f64;
+        let m = match_count as f64;
         let t = transpositions as f64 / 2.0;
+        (m / len1 as f64 + m / len2 as f64 + (m - t) / m) / 3.0
+    }
 
-        if matches == 0 {
-            0.0
+    fn common_prefix_len(&self, str1: &str, str2: &str) -> usize {
+        let max_prefix = 4;
+        let chars1: Vec<char> = str1.chars().collect();
+        let chars2: Vec<char> = str2.chars().collect();
+        let min_len = min(chars1.len(), chars2.len()).min(max_prefix);
+
+        (0..min_len).take_while(|&i| chars1[i] == chars2[i]).count()
+    }
+
+    fn compute_resemblance(&self, query: &str, candidate: &str) -> f64 {
+        let jaro_score = self.compute_jaro(query, candidate);
+        let prefix_len = self.common_prefix_len(query, candidate);
+        jaro_score + prefix_len as f64 * self.prefix_weight * (1.0 - jaro_score)
+    }
+}
+
+impl Resembler<String, String, ()> for JaroWinkler {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
+        }
+
+        let score = self.compute_resemblance(query, candidate);
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
         } else {
-            (m / s1_len as f64 + m / s2_len as f64 + (m - t) / m) / 3.0
-        }
-    }
+            Resemblance::Disparity
+        };
 
-    fn get_common_prefix_length(&self, s1: &str, s2: &str) -> usize {
-        let max_prefix_len = 4;
-
-        let s1_chars: Vec<char> = s1.chars().collect();
-        let s2_chars: Vec<char> = s2.chars().collect();
-
-        let min_len = s1_chars.len().min(s2_chars.len()).min(max_prefix_len);
-
-        let mut prefix_len = 0;
-        for i in 0..min_len {
-            if s1_chars[i] == s2_chars[i] {
-                prefix_len += 1;
-            } else {
-                break;
-            }
-        }
-
-        prefix_len
+        Ok(result)
     }
 }
 
-impl Resemblance<String, String> for JaroWinkler {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let jaro_dist = self.jaro_distance(query, candidate);
-
-        let prefix_len = self.get_common_prefix_length(query, candidate);
-
-        jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
-    }
-
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
-    }
-}
-
-impl Resemblance<&str, String> for JaroWinkler {
-    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
-        let jaro_dist = self.jaro_distance(query, candidate);
-        let prefix_len = self.get_common_prefix_length(query, candidate);
-        jaro_dist + (prefix_len as f64 * self.prefix_scale * (1.0 - jaro_dist))
-    }
-
-    fn perfect(&self, query: &&str, candidate: &String) -> bool {
-        *query == candidate
-    }
-}
-
-/// Cosine similarity scorer for strings using character n-grams
 #[derive(Debug, PartialEq)]
 pub struct Cosine {
-    n_gram_size: usize,
+    ngram_size: usize,
 }
 
 impl Default for Cosine {
     fn default() -> Self {
-        Self { n_gram_size: 2 }
+        Self { ngram_size: 2 }
     }
 }
 
 impl Cosine {
-    pub fn new(n_gram_size: usize) -> Self {
-        Self { n_gram_size: n_gram_size.max(1) }
+    pub fn new(ngram_size: usize) -> Self {
+        Self { ngram_size: ngram_size.max(1) }
     }
 
-    fn get_n_grams(&self, text: &str) -> HashMap<String, usize> {
-        let mut n_grams = HashMap::new();
-
-        if text.len() < self.n_gram_size {
-            if !text.is_empty() {
-                *n_grams.entry(text.to_string()).or_insert(0) += 1;
-            }
-            return n_grams;
+    fn extract_ngrams(&self, text: &str) -> HashMap<String, usize> {
+        let mut ngrams = HashMap::new();
+        if text.len() < self.ngram_size {
+            if !text.is_empty() { ngrams.insert(text.to_string(), 1); }
+            return ngrams;
         }
 
         let chars: Vec<char> = text.chars().collect();
-
-        for i in 0..=(chars.len() - self.n_gram_size) {
-            let n_gram: String = chars[i..(i + self.n_gram_size)].iter().collect();
-            *n_grams.entry(n_gram).or_insert(0) += 1;
+        for i in 0..=chars.len() - self.ngram_size {
+            let ngram: String = chars[i..i + self.ngram_size].iter().collect();
+            *ngrams.entry(ngram).or_insert(0) += 1;
         }
-
-        n_grams
+        ngrams
     }
-}
 
-impl Resemblance<String, String> for Cosine {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let query_n_grams = self.get_n_grams(query);
-        let candidate_n_grams = self.get_n_grams(candidate);
+    fn compute_resemblance(&self, query: &str, candidate: &str) -> f64 {
+        let query_ngrams = self.extract_ngrams(query);
+        let candidate_ngrams = self.extract_ngrams(candidate);
 
-        if query_n_grams.is_empty() || candidate_n_grams.is_empty() {
+        if query_ngrams.is_empty() || candidate_ngrams.is_empty() {
             return if query.is_empty() && candidate.is_empty() { 1.0 } else { 0.0 };
         }
 
-        let mut dot_product = 0.0;
-        for (n_gram, query_count) in &query_n_grams {
-            if let Some(candidate_count) = candidate_n_grams.get(n_gram) {
-                dot_product += (*query_count as f64) * (*candidate_count as f64);
-            }
-        }
+        let dot_product = query_ngrams.iter()
+            .filter_map(|(ngram, count)| candidate_ngrams.get(ngram).map(|c| (*count as f64) * (*c as f64)))
+            .sum::<f64>();
 
-        let query_magnitude: f64 = query_n_grams.values().map(|count| (*count as f64).powi(2)).sum::<f64>().sqrt();
-        let candidate_magnitude: f64 = candidate_n_grams.values().map(|count| (*count as f64).powi(2)).sum::<f64>().sqrt();
+        let query_norm = query_ngrams.values().map(|c| (*c as f64).powi(2)).sum::<f64>().sqrt();
+        let candidate_norm = candidate_ngrams.values().map(|c| (*c as f64).powi(2)).sum::<f64>().sqrt();
 
-        // Calculate cosine similarity
-        if query_magnitude > 0.0 && candidate_magnitude > 0.0 {
-            dot_product / (query_magnitude * candidate_magnitude)
+        if query_norm > 0.0 && candidate_norm > 0.0 {
+            dot_product / (query_norm * candidate_norm)
         } else {
             0.0
         }
     }
+}
 
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
+impl Resembler<String, String, ()> for Cosine {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
+        }
+
+        let score = self.compute_resemblance(query, candidate);
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
+        } else {
+            Resemblance::Disparity
+        };
+
+        Ok(result)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ExactMatch;
 
-impl Resemblance<String, String> for ExactMatch {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        if query == candidate { 1.0 } else { 0.0 }
-    }
-
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
-    }
-}
-
-impl Resemblance<&str, String> for ExactMatch {
-    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
-        if *query == candidate { 1.0 } else { 0.0 }
-    }
-
-    fn perfect(&self, query: &&str, candidate: &String) -> bool {
-        *query == candidate
+impl Resembler<String, String, ()> for ExactMatch {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            Ok(Resemblance::Perfect)
+        } else {
+            Ok(Resemblance::Disparity)
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct CaseInsensitive;
 
-impl Resemblance<String, String> for CaseInsensitive {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
-    }
-
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query.to_lowercase() == candidate.to_lowercase()
-    }
-}
-
-impl Resemblance<&str, String> for CaseInsensitive {
-    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
-        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
-    }
-
-    fn perfect(&self, query: &&str, candidate: &String) -> bool {
-        query.to_lowercase() == candidate.to_lowercase()
-    }
-}
-
-impl Resemblance<String, &str> for CaseInsensitive {
-    fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
-        if query.to_lowercase() == candidate.to_lowercase() { 0.95 } else { 0.0 }
-    }
-
-    fn perfect(&self, query: &String, candidate: &&str) -> bool {
-        query.to_lowercase() == candidate.to_lowercase()
+impl Resembler<String, String, ()> for CaseInsensitive {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query.to_lowercase() == candidate.to_lowercase() {
+            Ok(Resemblance::Partial(0.95))
+        } else {
+            Ok(Resemblance::Disparity)
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Prefix;
 
-impl Resemblance<String, String> for Prefix {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let query_lower = query.to_lowercase();
-        let candidate_lower = candidate.to_lowercase();
-
-        if candidate_lower.starts_with(&query_lower) {
-            0.9 * (query.len() as f64 / candidate.len() as f64).min(1.0)
-        } else {
-            0.0
+impl Resembler<String, String, ()> for Prefix {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
-    }
 
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
-    }
-}
-
-impl Resemblance<&str, String> for Prefix {
-    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
-        let query_lower = query.to_lowercase();
-        let candidate_lower = candidate.to_lowercase();
-
-        if candidate_lower.starts_with(&query_lower) {
-            0.9 * (query.len() as f64 / candidate.len() as f64).min(1.0)
+        if candidate.to_lowercase().starts_with(&query.to_lowercase()) {
+            let score = 0.9 * f64::min(query.len() as f64 / candidate.len() as f64, 1.0);
+            Ok(Resemblance::Partial(score))
         } else {
-            0.0
+            Ok(Resemblance::Disparity)
         }
-    }
-
-    fn perfect(&self, query: &&str, candidate: &String) -> bool {
-        *query == candidate
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Suffix;
 
-impl Resemblance<String, String> for Suffix {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let query_lower = query.to_lowercase();
-        let candidate_lower = candidate.to_lowercase();
-
-        if candidate_lower.ends_with(&query_lower) {
-            0.85 * (query.len() as f64 / candidate.len() as f64).min(1.0)
-        } else {
-            0.0
+impl Resembler<String, String, ()> for Suffix {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
-    }
 
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
+        if candidate.to_lowercase().ends_with(&query.to_lowercase()) {
+            let score = 0.85 * f64::min(query.len() as f64 / candidate.len() as f64, 1.0);
+            Ok(Resemblance::Partial(score))
+        } else {
+            Ok(Resemblance::Disparity)
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Substring;
 
-impl Resemblance<String, String> for Substring {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let query_lower = query.to_lowercase();
-        let candidate_lower = candidate.to_lowercase();
-
-        if candidate_lower.contains(&query_lower) {
-            0.8 * (query.len() as f64 / candidate.len() as f64).min(1.0)
-        } else {
-            0.0
+impl Resembler<String, String, ()> for Substring {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
-    }
 
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
+        if candidate.to_lowercase().contains(&query.to_lowercase()) {
+            let score = 0.8 * f64::min(query.len() as f64 / candidate.len() as f64, 1.0);
+            Ok(Resemblance::Partial(score))
+        } else {
+            Ok(Resemblance::Disparity)
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct EditDistance;
 
-impl Resemblance<String, String> for EditDistance {
-    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
-        let distance = damerau_levenshtein_distance(s1, s2);
-        let max_len = max(s1.len(), s2.len());
-
-        if max_len == 0 {
-            return 1.0;
+impl Resembler<String, String, ()> for EditDistance {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
 
-        1.0 - (distance as f64 / max_len as f64)
-    }
+        let distance = damerau_levenshtein_distance(query, candidate);
+        let max_len = max(query.len(), candidate.len());
+        let score = if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) };
 
-    fn perfect(&self, s1: &String, s2: &String) -> bool {
-        s1 == s2
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
+        } else {
+            Resemblance::Disparity
+        };
+
+        Ok(result)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct TokenSimilarity {
-    pub separators: Vec<char>,
+    separators: Vec<char>,
 }
 
 impl Default for TokenSimilarity {
     fn default() -> Self {
-        TokenSimilarity {
-            separators: vec!['_', '-', '.', ' '],
-        }
+        Self { separators: vec!['_', '-', '.', ' '] }
     }
 }
 
 impl TokenSimilarity {
     pub fn new(separators: Vec<char>) -> Self {
-        TokenSimilarity { separators }
+        Self { separators }
     }
 
-    pub fn split_on_separators(&self, s: &str) -> Vec<String> {
-        let mut tokens: Vec<String> = Vec::new();
+    fn tokenize(&self, text: &str) -> Vec<String> {
+        let mut tokens = Vec::new();
         let mut current = String::new();
-
-        for c in s.chars() {
+        for c in text.chars() {
             if self.separators.contains(&c) {
                 if !current.is_empty() {
                     tokens.push(current);
@@ -399,136 +329,109 @@ impl TokenSimilarity {
                 current.push(c);
             }
         }
-
-        if !current.is_empty() {
-            tokens.push(current);
-        }
-
+        if !current.is_empty() { tokens.push(current); }
         tokens
     }
 
-    pub fn token_similarity(&self, tokens1: &[String], tokens2: &[String]) -> f64 {
-        if tokens1.is_empty() || tokens2.is_empty() {
-            return 0.0;
-        }
+    fn compute_token_similarity(&self, tokens1: &[String], tokens2: &[String]) -> f64 {
+        if tokens1.is_empty() || tokens2.is_empty() { return 0.0; }
 
-        let mut total_sim = 0.0;
+        let mut total_score = 0.0;
         let mut matches = 0;
 
         for t1 in tokens1 {
-            let mut best_sim : f64 = 0.0;
-
+            let mut best_score = 0.0;
             for t2 in tokens2 {
                 if t1 == t2 {
-                    best_sim = 1.0;
+                    best_score = 1.0;
                     break;
                 }
-
-                let edit_distance = damerau_levenshtein_distance(t1, t2);
+                let distance = damerau_levenshtein_distance(t1, t2);
                 let max_len = max(t1.len(), t2.len());
-                let token_sim = if max_len > 0 {
-                    1.0 - (edit_distance as f64 / max_len as f64)
-                } else {
-                    0.0
-                };
-
-                best_sim = best_sim.max(token_sim);
+                let score = if max_len > 0 { 1.0 - (distance as f64 / max_len as f64) } else { 0.0 };
+                best_score = f64::max(best_score, score);
             }
-
-            total_sim += best_sim;
-            if best_sim > 0.8 {
-                matches += 1;
-            }
+            total_score += best_score;
+            if best_score > 0.8 { matches += 1; }
         }
 
-        let token_sim = if !tokens1.is_empty() {
-            total_sim / tokens1.len() as f64
-        } else {
-            0.0
-        };
-
-        let match_ratio = if !tokens1.is_empty() {
-            matches as f64 / tokens1.len() as f64
-        } else {
-            0.0
-        };
-
-        token_sim * (1.0 + 0.5 * match_ratio)
+        let avg_score = total_score / tokens1.len() as f64;
+        let match_ratio = matches as f64 / tokens1.len() as f64;
+        avg_score * (1.0 + 0.5 * match_ratio)
     }
 }
 
-impl Resemblance<String, String> for TokenSimilarity {
-    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
-        let s1_lower = s1.to_lowercase();
-        let s2_lower = s2.to_lowercase();
+impl Resembler<String, String, ()> for TokenSimilarity {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
+        }
 
-        let s1_tokens = self.split_on_separators(&s1_lower);
-        let s2_tokens = self.split_on_separators(&s2_lower);
+        let query_tokens = self.tokenize(&query.to_lowercase());
+        let candidate_tokens = self.tokenize(&candidate.to_lowercase());
+        let score = self.compute_token_similarity(&query_tokens, &candidate_tokens);
 
-        self.token_similarity(&s1_tokens, &s2_tokens)
-    }
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
+        } else {
+            Resemblance::Disparity
+        };
 
-    fn perfect(&self, s1: &String, s2: &String) -> bool {
-        s1 == s2
+        Ok(result)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Acronym {
-    pub token_scorer: TokenSimilarity,
-    pub max_acronym_length: usize,
+    token_scorer: TokenSimilarity,
+    max_acronym_len: usize,
 }
 
 impl Default for Acronym {
     fn default() -> Self {
-        Acronym {
+        Self {
             token_scorer: TokenSimilarity::default(),
-            max_acronym_length: 5,
+            max_acronym_len: 5,
         }
     }
 }
 
-impl Resemblance<String, String> for Acronym {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        if query.len() > self.max_acronym_length {
-            return 0.0;
+impl Resembler<String, String, ()> for Acronym {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
 
-        let query_lower = query.to_lowercase();
-        let candidate_lower = candidate.to_lowercase();
-
-        let tokens = self.token_scorer.split_on_separators(&candidate_lower);
-
-        if tokens.len() < query_lower.len() {
-            return 0.0;
+        if query.len() > self.max_acronym_len {
+            return Ok(Resemblance::Disparity);
         }
 
-        let first_letters: String = tokens.iter()
-            .filter_map(|token| token.chars().next())
-            .collect();
-
-        if first_letters.contains(&query_lower) {
-            return 0.75;
+        let tokens = self.token_scorer.tokenize(&candidate.to_lowercase());
+        if tokens.len() < query.len() {
+            return Ok(Resemblance::Disparity);
         }
 
-        0.0
-    }
-
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
+        let acronym: String = tokens.iter().filter_map(|t| t.chars().next()).collect();
+        if acronym.contains(&query.to_lowercase()) {
+            Ok(Resemblance::Partial(0.75))
+        } else {
+            Ok(Resemblance::Disparity)
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct KeyboardProximity {
-    pub keyboard_layout: HashMap<char, Vec<char>>,
-    pub layout_type: KeyboardLayoutType,
+    layout: HashMap<char, Vec<char>>,
+    layout_type: KeyboardLayoutType,
 }
 
 impl Default for KeyboardProximity {
     fn default() -> Self {
-        KeyboardProximity {
-            keyboard_layout: KeyboardLayoutType::Qwerty.get_layout(),
+        Self {
+            layout: KeyboardLayoutType::Qwerty.get_layout(),
             layout_type: KeyboardLayoutType::Qwerty,
         }
     }
@@ -536,131 +439,124 @@ impl Default for KeyboardProximity {
 
 impl KeyboardProximity {
     pub fn new(layout_type: KeyboardLayoutType) -> Self {
-        KeyboardProximity {
-            keyboard_layout: layout_type.get_layout(),
+        Self {
+            layout: layout_type.get_layout(),
             layout_type,
         }
     }
 }
 
-impl Resemblance<String, String> for KeyboardProximity {
-    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
-        let s1_lower = s1.to_lowercase();
-        let s2_lower = s2.to_lowercase();
-
-        if (s1_lower.len() as isize - s2_lower.len() as isize).abs() > 2 {
-            return 0.0;
+impl Resembler<String, String, ()> for KeyboardProximity {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
 
-        let s1_chars: Vec<char> = s1_lower.chars().collect();
-        let s2_chars: Vec<char> = s2_lower.chars().collect();
+        let query_chars: Vec<char> = query.to_lowercase().chars().collect();
+        let candidate_chars: Vec<char> = candidate.to_lowercase().chars().collect();
 
-        let edit_distance = damerau_levenshtein_distance(&s1_lower, &s2_lower);
-
-        if edit_distance > 3 {
-            return 0.0;
+        if (query_chars.len() as isize - candidate_chars.len() as isize).abs() > 2 {
+            return Ok(Resemblance::Disparity);
         }
 
-        let mut adjacency_count = 0;
-        let max_comparisons = min(s1_chars.len(), s2_chars.len());
+        let distance = damerau_levenshtein_distance(query, candidate);
+        if distance > 3 {
+            return Ok(Resemblance::Disparity);
+        }
 
+        let mut adjacent_count = 0;
+        let max_comparisons = min(query_chars.len(), candidate_chars.len());
         for i in 0..max_comparisons {
-            if s1_chars[i] == s2_chars[i] {
-                continue;
-            }
-
-            if let Some(neighbors) = self.keyboard_layout.get(&s1_chars[i]) {
-                if neighbors.contains(&s2_chars[i]) {
-                    adjacency_count += 1;
-                }
+            if query_chars[i] == candidate_chars[i] { continue; }
+            if let Some(neighbors) = self.layout.get(&query_chars[i]) {
+                if neighbors.contains(&candidate_chars[i]) { adjacent_count += 1; }
             }
         }
 
-        let differing_chars = edit_distance;
+        let differing_chars = distance;
+        if differing_chars == 0 { return Ok(Resemblance::Perfect); }
 
-        if differing_chars == 0 {
-            1.0
+        let keyboard_factor = adjacent_count as f64 / differing_chars as f64;
+        let length_similarity = 1.0 - ((query_chars.len() as isize - candidate_chars.len() as isize).abs() as f64 / max(query_chars.len(), candidate_chars.len()) as f64);
+        let base_score = 1.0 - (distance as f64 / max(query_chars.len(), candidate_chars.len()) as f64);
+        let score = base_score * (1.0 + 0.3 * keyboard_factor) * length_similarity;
+
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
         } else {
-            let keyboard_factor = adjacency_count as f64 / differing_chars as f64;
-            let length_similarity = 1.0 - ((s1_chars.len() as isize - s2_chars.len() as isize).abs() as f64 / max(s1_chars.len(), s2_chars.len()) as f64);
+            Resemblance::Disparity
+        };
 
-            let base_similarity = 1.0 - (edit_distance as f64 / max(s1_chars.len(), s2_chars.len()) as f64);
-            base_similarity * (1.0 + 0.3 * keyboard_factor) * length_similarity
-        }
-    }
-
-    fn perfect(&self, s1: &String, s2: &String) -> bool {
-        s1 == s2
+        Ok(result)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct FuzzySearch {
-    pub token_scorer: TokenSimilarity,
-    pub min_token_similarity: f64,
+    token_scorer: TokenSimilarity,
+    min_token_score: f64,
 }
 
 impl Default for FuzzySearch {
     fn default() -> Self {
-        FuzzySearch {
+        Self {
             token_scorer: TokenSimilarity::default(),
-            min_token_similarity: 0.7,
+            min_token_score: 0.7,
         }
     }
 }
 
-impl Resemblance<String, String> for FuzzySearch {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let query_lower = query.to_lowercase();
-        let candidate_lower = candidate.to_lowercase();
+impl Resembler<String, String, ()> for FuzzySearch {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
+        }
 
-        let query_tokens = self.token_scorer.split_on_separators(&query_lower);
-        let candidate_tokens = self.token_scorer.split_on_separators(&candidate_lower);
+        let query_tokens = self.token_scorer.tokenize(&query.to_lowercase());
+        let candidate_tokens = self.token_scorer.tokenize(&candidate.to_lowercase());
 
         if query_tokens.is_empty() || candidate_tokens.is_empty() {
-            return 0.0;
+            return Ok(Resemblance::Disparity);
         }
 
         let mut matched_tokens = 0;
-        let mut total_similarity = 0.0;
+        let mut total_score = 0.0;
 
         for q_token in &query_tokens {
-            let mut best_match = 0.0;
-
+            let mut best_score = 0.0;
             for c_token in &candidate_tokens {
-                let edit_sim = 1.0 - (damerau_levenshtein_distance(q_token, c_token) as f64
-                    / max(q_token.len(), c_token.len()) as f64);
-
-                if edit_sim > best_match {
-                    best_match = edit_sim;
-                }
-
+                let edit_score = 1.0 - (damerau_levenshtein_distance(q_token, c_token) as f64 / max(q_token.len(), c_token.len()) as f64);
+                best_score = f64::max(best_score, edit_score);
                 if c_token.contains(q_token) {
                     let contain_score = q_token.len() as f64 / c_token.len() as f64 * 0.9;
-                    best_match = best_match.max(contain_score);
+                    best_score = best_score.max(contain_score);
                 }
             }
-
-            total_similarity += best_match;
-            if best_match >= self.min_token_similarity {
-                matched_tokens += 1;
-            }
+            total_score += best_score;
+            if best_score >= self.min_token_score { matched_tokens += 1; }
         }
 
         let coverage = matched_tokens as f64 / query_tokens.len() as f64;
-        let avg_similarity = total_similarity / query_tokens.len() as f64;
+        let avg_score = total_score / query_tokens.len() as f64;
+        let score = coverage * avg_score * (0.7 + 0.3 * coverage);
 
-        coverage * avg_similarity * (0.7 + 0.3 * coverage)
-    }
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
+        } else {
+            Resemblance::Disparity
+        };
 
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
+        Ok(result)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Phonetic {
-    pub mode: PhoneticMode,
+    mode: PhoneticMode,
 }
 
 #[derive(Debug, PartialEq)]
@@ -671,26 +567,21 @@ pub enum PhoneticMode {
 
 impl Default for Phonetic {
     fn default() -> Self {
-        Phonetic {
-            mode: PhoneticMode::Soundex,
-        }
+        Self { mode: PhoneticMode::Soundex }
     }
 }
 
 impl Phonetic {
     pub fn new(mode: PhoneticMode) -> Self {
-        Phonetic { mode }
+        Self { mode }
     }
 
-    fn soundex(&self, s: &str) -> String {
-        if s.is_empty() {
-            return "0000".to_string();
-        }
+    fn compute_soundex(&self, text: &str) -> String {
+        if text.is_empty() { return "0000".to_string(); }
 
         let mut result = String::new();
         let mut prev_code = 0;
-
-        for (i, c) in s.to_lowercase().chars().enumerate() {
+        for (i, c) in text.to_lowercase().chars().enumerate() {
             let code = match c {
                 'b' | 'f' | 'p' | 'v' => 1,
                 'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => 2,
@@ -708,152 +599,135 @@ impl Phonetic {
             }
 
             prev_code = code;
-
-            if result.len() >= 4 {
-                break;
-            }
+            if result.len() >= 4 { break; }
         }
 
         while result.len() < 4 {
             result.push('0');
         }
-
         result
     }
 }
 
-impl Resemblance<String, String> for Phonetic {
-    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
-        match self.mode {
-            PhoneticMode::Soundex => {
-                let s1_code = self.soundex(s1);
-                let s2_code = self.soundex(s2);
+impl Resembler<String, String, ()> for Phonetic {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
+        }
 
-                if s1_code == s2_code {
-                    0.85
+        let result = match self.mode {
+            PhoneticMode::Soundex => {
+                let query_code = self.compute_soundex(query);
+                let candidate_code = self.compute_soundex(candidate);
+                if query_code == candidate_code {
+                    Resemblance::Partial(0.85)
                 } else {
-                    let common_prefix_len = s1_code.chars().zip(s2_code.chars())
+                    let common_prefix_len = query_code.chars().zip(candidate_code.chars())
                         .take_while(|(c1, c2)| c1 == c2)
                         .count();
-
                     if common_prefix_len > 0 {
-                        0.6 * (common_prefix_len as f64 / 4.0)
+                        Resemblance::Partial(0.6 * (common_prefix_len as f64 / 4.0))
                     } else {
-                        0.0
+                        Resemblance::Disparity
                     }
                 }
-            },
+            }
             PhoneticMode::DoubleMetaphone => {
-                // Simplified double metaphone implementation
-                if s1.to_lowercase() == s2.to_lowercase() {
-                    return 1.0;
+                if query.to_lowercase() == candidate.to_lowercase() {
+                    return Ok(Resemblance::Perfect);
                 }
-
-                let s1_code = self.soundex(s1);
-                let s2_code = self.soundex(s2);
-
-                if s1_code == s2_code {
-                    0.8
+                let query_code = self.compute_soundex(query);
+                let candidate_code = self.compute_soundex(candidate);
+                if query_code == candidate_code {
+                    Resemblance::Partial(0.8)
                 } else {
-                    0.0
+                    Resemblance::Disparity
                 }
             }
-        }
-    }
+        };
 
-    fn perfect(&self, s1: &String, s2: &String) -> bool {
-        s1 == s2
+        Ok(result)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct NGram {
-    pub n: usize,
+    size: usize,
 }
 
 impl Default for NGram {
     fn default() -> Self {
-        NGram { n: 2 }
+        Self { size: 2 }
     }
 }
 
 impl NGram {
-    pub fn new(n: usize) -> Self {
-        NGram { n }
+    pub fn new(size: usize) -> Self {
+        Self { size }
     }
 
-    fn generate_ngrams(&self, s: &str) -> Vec<String> {
-        if s.len() < self.n {
-            return vec![s.to_string()];
-        }
+    fn generate_ngrams(&self, text: &str) -> Vec<String> {
+        if text.len() < self.size { return vec![text.to_string()]; }
 
-        let chars: Vec<char> = s.chars().collect();
-        let mut ngrams = Vec::new();
-
-        for i in 0..=chars.len() - self.n {
-            let ngram: String = chars[i..i + self.n].iter().collect();
-            ngrams.push(ngram);
-        }
-
-        ngrams
+        let chars: Vec<char> = text.chars().collect();
+        (0..=chars.len() - self.size)
+            .map(|i| chars[i..i + self.size].iter().collect())
+            .collect()
     }
 }
 
-impl Resemblance<String, String> for NGram {
-    fn resemblance(&self, s1: &String, s2: &String) -> f64 {
-        if s1.is_empty() || s2.is_empty() {
-            return if s1.is_empty() && s2.is_empty() { 1.0 } else { 0.0 };
+impl Resembler<String, String, ()> for NGram {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
         }
 
-        let s1_lower = s1.to_lowercase();
-        let s2_lower = s2.to_lowercase();
-
-        let s1_ngrams = self.generate_ngrams(&s1_lower);
-        let s2_ngrams = self.generate_ngrams(&s2_lower);
-
-        if s1_ngrams.is_empty() || s2_ngrams.is_empty() {
-            return 0.0;
+        if query.is_empty() && candidate.is_empty() {
+            return Ok(Resemblance::Perfect);
+        }
+        if query.is_empty() || candidate.is_empty() {
+            return Ok(Resemblance::Disparity);
         }
 
-        let mut intersection = 0;
+        let query_ngrams = self.generate_ngrams(&query.to_lowercase());
+        let candidate_ngrams = self.generate_ngrams(&candidate.to_lowercase());
 
-        for ngram in &s1_ngrams {
-            if s2_ngrams.contains(ngram) {
-                intersection += 1;
-            }
+        if query_ngrams.is_empty() || candidate_ngrams.is_empty() {
+            return Ok(Resemblance::Disparity);
         }
 
-        (2.0 * intersection as f64) / (s1_ngrams.len() + s2_ngrams.len()) as f64
-    }
+        let intersection = query_ngrams.iter().filter(|ngram| candidate_ngrams.contains(ngram)).count();
+        let score = 2.0 * intersection as f64 / (query_ngrams.len() + candidate_ngrams.len()) as f64;
 
-    fn perfect(&self, s1: &String, s2: &String) -> bool {
-        s1 == s2
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
+        } else {
+            Resemblance::Disparity
+        };
+
+        Ok(result)
     }
 }
 
-/// Word overlap similarity scorer using Jaccard similarity with customizable tokenization
 #[derive(Debug, PartialEq)]
 pub struct WordOverlap {
-    /// Whether to ignore case when comparing words
     ignore_case: bool,
-    /// Minimum length of words to consider
-    min_word_length: usize,
-    /// Custom tokenization characters (in addition to whitespace)
-    custom_separators: Option<Vec<char>>,
-    /// Whether to use stemming for word comparison
+    min_word_len: usize,
+    separators: Option<Vec<char>>,
     use_stemming: bool,
-    /// Stopwords to ignore in comparison
-    stopwords: HashSet<String>,
+    stop_words: HashSet<String>,
 }
 
 impl Default for WordOverlap {
     fn default() -> Self {
         Self {
             ignore_case: true,
-            min_word_length: 1,
-            custom_separators: None,
+            min_word_len: 1,
+            separators: None,
             use_stemming: false,
-            stopwords: HashSet::new(),
+            stop_words: HashSet::new(),
         }
     }
 }
@@ -861,115 +735,71 @@ impl Default for WordOverlap {
 impl WordOverlap {
     pub fn new(
         ignore_case: bool,
-        min_word_length: usize,
-        custom_separators: Option<Vec<char>>,
+        min_word_len: usize,
+        separators: Option<Vec<char>>,
         use_stemming: bool,
-        stopwords: Option<Vec<&str>>,
+        stop_words: Option<Vec<&str>>,
     ) -> Self {
         Self {
             ignore_case,
-            min_word_length,
-            custom_separators,
+            min_word_len,
+            separators,
             use_stemming,
-            stopwords: stopwords
-                .map(|words| words.into_iter().map(String::from).collect())
-                .unwrap_or_default(),
+            stop_words: stop_words.map(|words| words.into_iter().map(String::from).collect()).unwrap_or_default(),
         }
     }
 
-    /// Create a simple WordOverlap with just case sensitivity setting
     pub fn with_case_sensitivity(ignore_case: bool) -> Self {
-        Self {
-            ignore_case,
-            ..Default::default()
-        }
+        Self { ignore_case, ..Default::default() }
     }
 
-    /// Tokenize text into words based on configuration
-    fn get_words(&self, text: &str) -> Vec<String> {
-        let normalized = if self.ignore_case {
-            text.to_lowercase()
-        } else {
-            text.to_string()
-        };
-
-        let mut result = Vec::new();
-        let mut current_word = String::new();
+    fn extract_words(&self, text: &str) -> Vec<String> {
+        let normalized = if self.ignore_case { text.to_lowercase() } else { text.to_string() };
+        let mut words = Vec::new();
+        let mut current = String::new();
 
         for c in normalized.chars() {
-            let is_separator = c.is_whitespace() ||
-                self.custom_separators.as_ref()
-                    .map_or(false, |seps| seps.contains(&c));
-
+            let is_separator = c.is_whitespace() || self.separators.as_ref().map_or(false, |seps| seps.contains(&c));
             if is_separator {
-                if !current_word.is_empty() {
-                    self.add_processed_word(&current_word, &mut result);
-                    current_word.clear();
+                if !current.is_empty() {
+                    self.process_word(&current, &mut words);
+                    current.clear();
                 }
             } else {
-                current_word.push(c);
+                current.push(c);
             }
         }
-
-        if !current_word.is_empty() {
-            self.add_processed_word(&current_word, &mut result);
-        }
-
-        result
+        if !current.is_empty() { self.process_word(&current, &mut words); }
+        words
     }
 
-    /// Process and add a word to the result if it meets criteria
-    fn add_processed_word(&self, word: &str, result: &mut Vec<String>) {
-        if word.len() < self.min_word_length {
-            return;
-        }
-
-        if self.stopwords.contains(word) {
-            return;
-        }
-
-        let processed = if self.use_stemming {
-            self.apply_stemming(word)
-        } else {
-            word.to_string()
-        };
-
-        result.push(processed);
+    fn process_word(&self, word: &str, words: &mut Vec<String>) {
+        if word.len() < self.min_word_len || self.stop_words.contains(word) { return; }
+        let processed = if self.use_stemming { self.stem_word(word) } else { word.to_string() };
+        words.push(processed);
     }
 
-    /// Apply basic stemming (very simplified Porter stemming)
-    fn apply_stemming(&self, word: &str) -> String {
+    fn stem_word(&self, word: &str) -> String {
         let mut result = word.to_string();
-
         for suffix in &["ing", "ed", "s", "es", "ies"] {
             if result.ends_with(suffix) && result.len() > suffix.len() + 2 {
                 result.truncate(result.len() - suffix.len());
                 break;
             }
         }
-
         result
     }
 
-    /// Calculate weighted Jaccard similarity with position awareness
     fn weighted_jaccard(&self, query_words: &[String], candidate_words: &[String]) -> f64 {
-        if query_words.is_empty() && candidate_words.is_empty() {
-            return 1.0;
-        }
-
-        if query_words.is_empty() || candidate_words.is_empty() {
-            return 0.0;
-        }
+        if query_words.is_empty() && candidate_words.is_empty() { return 1.0; }
+        if query_words.is_empty() || candidate_words.is_empty() { return 0.0; }
 
         let mut common_weight = 0.0;
-
         for (i, q_word) in query_words.iter().enumerate() {
             for (j, c_word) in candidate_words.iter().enumerate() {
                 if q_word == c_word {
-                    let position_factor = 1.0 - (i as f64 - j as f64).abs() /
-                        (query_words.len().max(candidate_words.len()) as f64);
-
-                    common_weight += 1.0 * (0.5 + 0.5 * position_factor);
+                    let position_factor = 1.0 - (i as f64 - j as f64).abs() / max(query_words.len(), candidate_words.len()) as f64;
+                    common_weight += 0.5 + 0.5 * position_factor;
                     break;
                 }
             }
@@ -980,57 +810,74 @@ impl WordOverlap {
     }
 }
 
-impl Resemblance<String, String> for WordOverlap {
-    fn resemblance(&self, query: &String, candidate: &String) -> f64 {
-        let query_words = self.get_words(query);
-        let candidate_words = self.get_words(candidate);
+impl Resembler<String, String, ()> for WordOverlap {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        if query == candidate {
+            return Ok(Resemblance::Perfect);
+        }
+
+        let query_words = self.extract_words(query);
+        let candidate_words = self.extract_words(candidate);
 
         if query_words.is_empty() && candidate_words.is_empty() {
-            return 1.0;
+            return Ok(Resemblance::Perfect);
         }
-
         if query_words.is_empty() || candidate_words.is_empty() {
-            return 0.0;
+            return Ok(Resemblance::Disparity);
         }
 
-        if query_words.len() <= 2 || candidate_words.len() <= 2 {
-            let mut common_words = 0;
-            for q_word in &query_words {
-                if candidate_words.contains(q_word) {
-                    common_words += 1;
-                }
-            }
-
+        let score = if query_words.len() <= 2 || candidate_words.len() <= 2 {
+            let common_words = query_words.iter().filter(|w| candidate_words.contains(w)).count();
             let union_size = query_words.len() + candidate_words.len() - common_words;
             common_words as f64 / union_size as f64
         } else {
             self.weighted_jaccard(&query_words, &candidate_words)
+        };
+
+        let result = if score >= 1.0 {
+            Resemblance::Perfect
+        } else if score > 0.0 {
+            Resemblance::Partial(score)
+        } else {
+            Resemblance::Disparity
+        };
+
+        Ok(result)
+    }
+}
+
+#[derive(Debug)]
+pub struct FullMatcher {
+    blend: Blend<String, String, ()>,
+}
+
+impl Default for FullMatcher {
+    fn default() -> Self {
+        let dimensions = vec![
+            Dimension::new(JaroWinkler::default(), 0.2),
+            Dimension::new(Cosine::default(), 0.15),
+            Dimension::new(ExactMatch, 0.1),
+            Dimension::new(CaseInsensitive, 0.1),
+            Dimension::new(Prefix, 0.1),
+            Dimension::new(Suffix, 0.05),
+            Dimension::new(Substring, 0.05),
+            Dimension::new(EditDistance, 0.1),
+            Dimension::new(TokenSimilarity::default(), 0.1),
+            Dimension::new(Acronym::default(), 0.05),
+            Dimension::new(KeyboardProximity::default(), 0.05),
+            Dimension::new(FuzzySearch::default(), 0.1),
+            Dimension::new(Phonetic::default(), 0.05),
+            Dimension::new(NGram::default(), 0.05),
+            Dimension::new(WordOverlap::default(), 0.1),
+        ];
+        Self {
+            blend: Blend::weighted(dimensions),
         }
     }
-
-    fn perfect(&self, query: &String, candidate: &String) -> bool {
-        query == candidate
-    }
 }
 
-impl Resemblance<&str, String> for WordOverlap {
-    fn resemblance(&self, query: &&str, candidate: &String) -> f64 {
-        let query_str = query.to_string();
-        self.resemblance(&query_str, candidate)
-    }
-
-    fn perfect(&self, query: &&str, candidate: &String) -> bool {
-        *query == candidate
-    }
-}
-
-impl Resemblance<String, &str> for WordOverlap {
-    fn resemblance(&self, query: &String, candidate: &&str) -> f64 {
-        let candidate_str = candidate.to_string();
-        self.resemblance(query, &candidate_str)
-    }
-
-    fn perfect(&self, query: &String, candidate: &&str) -> bool {
-        query == *candidate
+impl Resembler<String, String, ()> for FullMatcher {
+    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+        self.blend.resemblance(query, candidate)
     }
 }
