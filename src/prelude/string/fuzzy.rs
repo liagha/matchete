@@ -1,4 +1,5 @@
 use {
+    core::cmp::{max, min},
     hashish::HashMap,
 
     crate::{
@@ -6,10 +7,9 @@ use {
         prelude::string::utils::edit_distance,
     }
 };
-use core::cmp::{max, min};
 
 /// Jaro-Winkler similarity
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Jaro {
     prefix_weight: f64,
 }
@@ -87,7 +87,7 @@ impl Jaro {
 }
 
 impl Resembler<String, String, ()> for Jaro {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -106,7 +106,7 @@ impl Resembler<String, String, ()> for Jaro {
 }
 
 /// Cosine similarity using n-grams
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Cosine {
     ngram_size: usize,
 }
@@ -161,7 +161,7 @@ impl Cosine {
 }
 
 impl Resembler<String, String, ()> for Cosine {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -180,11 +180,11 @@ impl Resembler<String, String, ()> for Cosine {
 }
 
 /// Edit distance matcher
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Levenshtein;
 
 impl Resembler<String, String, ()> for Levenshtein {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }

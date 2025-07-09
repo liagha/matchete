@@ -9,7 +9,7 @@ use core::cmp::{max, min};
 use crate::prelude::string::Tokens;
 
 /// Keyboard proximity matching
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Keyboard {
     layout: HashMap<char, Vec<char>>,
 }
@@ -31,7 +31,7 @@ impl Keyboard {
 }
 
 impl Resembler<String, String, ()> for Keyboard {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -78,7 +78,7 @@ impl Resembler<String, String, ()> for Keyboard {
 }
 
 /// Fuzzy search with multiple strategies
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Fuzzy {
     token_scorer: Tokens,
     min_score: f64,
@@ -94,7 +94,7 @@ impl Default for Fuzzy {
 }
 
 impl Resembler<String, String, ()> for Fuzzy {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }

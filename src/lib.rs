@@ -1,3 +1,4 @@
 mod assessor;
-pub mod prelude;
+mod prelude;
+pub use prelude::*;
 pub use assessor::*;

@@ -7,7 +7,7 @@ use {
     hashish::{HashSet},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Tokens {
     separators: Vec<char>,
 }
@@ -73,7 +73,7 @@ impl Tokens {
 }
 
 impl Resembler<String, String, ()> for Tokens {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -94,7 +94,7 @@ impl Resembler<String, String, ()> for Tokens {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Initials {
     token_scorer: Tokens,
     max_initials_len: usize,
@@ -110,7 +110,7 @@ impl Default for Initials {
 }
 
 impl Resembler<String, String, ()> for Initials {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -133,7 +133,7 @@ impl Resembler<String, String, ()> for Initials {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Words {
     ignore_case: bool,
     min_word_len: usize,
@@ -233,7 +233,7 @@ impl Words {
 }
 
 impl Resembler<String, String, ()> for Words {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }

@@ -1,5 +1,4 @@
 use {
-    hashish::HashMap,
     crate::{
         assessor::{
             Resembler, Resemblance,
@@ -7,11 +6,11 @@ use {
     }
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Exact;
 
 impl Resembler<String, String, ()> for Exact {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             Ok(Resemblance::Perfect)
         } else {
@@ -20,11 +19,11 @@ impl Resembler<String, String, ()> for Exact {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Relaxed;
 
 impl Resembler<String, String, ()> for Relaxed {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query.to_lowercase() == candidate.to_lowercase() {
             Ok(Resemblance::Partial(0.95))
         } else {

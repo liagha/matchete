@@ -1,5 +1,5 @@
 use {
-    std::sync::Arc,
+    std::sync::{Arc, Mutex},
     core::fmt::Debug,
 };
 
@@ -43,12 +43,12 @@ impl Resemblance {
 }
 
 pub trait Resembler<Query, Candidate, Error>: Debug {
-    fn resemblance(&self, query: &Query, candidate: &Candidate) -> Result<Resemblance, Error>;
+    fn resemblance(&mut self, query: &Query, candidate: &Candidate) -> Result<Resemblance, Error>;
 }
 
 #[derive(Clone, Debug)]
 pub struct Dimension<Query, Candidate, Error> {
-    pub resembler: Arc<dyn Resembler<Query, Candidate, Error>>,
+    pub resembler: Arc<Mutex<dyn Resembler<Query, Candidate, Error>>>,
     pub weight: f64,
     pub resemblance: Resemblance,
     pub contribution: f64,
@@ -58,7 +58,7 @@ pub struct Dimension<Query, Candidate, Error> {
 impl<Query, Candidate, Error> Dimension<Query, Candidate, Error> {
     pub fn new<R: Resembler<Query, Candidate, Error> + 'static>(resembler: R, weight: f64) -> Self {
         Self {
-            resembler: Arc::new(resembler),
+            resembler: Arc::new(Mutex::new(resembler)),
             weight,
             resemblance: Resemblance::Disparity,
             contribution: 0.0,
@@ -67,7 +67,7 @@ impl<Query, Candidate, Error> Dimension<Query, Candidate, Error> {
     }
 
     pub fn assess(&mut self, query: &Query, candidate: &Candidate) {
-        match self.resembler.resemblance(query, candidate) {
+        match self.resembler.lock().unwrap().resemblance(query, candidate) {
             Ok(resemblance) => {
                 self.resemblance = resemblance;
                 self.contribution = self.resemblance.to_f64() * self.weight;
@@ -83,179 +83,6 @@ impl<Query, Candidate, Error> Dimension<Query, Candidate, Error> {
 }
 
 #[derive(Debug)]
-pub struct Blend<Query, Candidate, Error> {
-    dimensions: Vec<Dimension<Query, Candidate, Error>>,
-    blender: Blender,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Blender {
-    Weighted,
-    Minimum,
-    Maximum,
-    Product,
-}
-
-impl<Query, Candidate, Error> Blend<Query, Candidate, Error> {
-    pub fn weighted(dimensions: Vec<Dimension<Query, Candidate, Error>>) -> Self {
-        Self {
-            dimensions,
-            blender: Blender::Weighted,
-        }
-    }
-
-    pub fn minimum(dimensions: Vec<Dimension<Query, Candidate, Error>>) -> Self {
-        Self {
-            dimensions,
-            blender: Blender::Minimum,
-        }
-    }
-
-    pub fn maximum(dimensions: Vec<Dimension<Query, Candidate, Error>>) -> Self {
-        Self {
-            dimensions,
-            blender: Blender::Maximum,
-        }
-    }
-
-    pub fn product(dimensions: Vec<Dimension<Query, Candidate, Error>>) -> Self {
-        Self {
-            dimensions,
-            blender: Blender::Product,
-        }
-    }
-
-    fn compute(&self, resemblances: &[f64], weights: &[f64]) -> f64 {
-        match self.blender {
-            Blender::Weighted => {
-                let total_contribution: f64 = resemblances.iter().zip(weights.iter()).map(|(r, w)| r * w).sum();
-                let total_weight: f64 = weights.iter().sum();
-                if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 }
-            }
-            Blender::Minimum => resemblances.iter().cloned().fold(f64::INFINITY, f64::min),
-            Blender::Maximum => resemblances.iter().cloned().fold(0.0, f64::max),
-            Blender::Product => resemblances.iter().product(),
-        }
-    }
-}
-
-impl<Query, Candidate, Error> Resembler<Query, Candidate, Error> for Blend<Query, Candidate, Error>
-where
-    Query: Clone + Debug,
-    Candidate: Clone + Debug,
-    Error: Clone + Debug,
-{
-    fn resemblance(&self, query: &Query, candidate: &Candidate) -> Result<Resemblance, Error> {
-        let mut dimensions = self.dimensions.clone();
-
-        for dimension in &mut dimensions {
-            dimension.assess(query, candidate);
-
-            if let Some(ref error) = dimension.error {
-                return Err(error.clone());
-            }
-        }
-
-        let resemblances: Vec<f64> = dimensions.iter().map(|d| d.resemblance.to_f64()).collect();
-        let weights: Vec<f64> = dimensions.iter().map(|d| d.weight).collect();
-
-        let value = self.compute(&resemblances, &weights);
-        let result = if value >= 1.0 {
-            Resemblance::Perfect
-        } else if value > 0.0 {
-            Resemblance::Partial(value)
-        } else {
-            Resemblance::Disparity
-        };
-
-        Ok(result)
-    }
-}
-
-#[derive(Debug)]
-pub struct Union<Query, Candidate, Error> {
-    resemblers: Vec<Arc<dyn Resembler<Query, Candidate, Error>>>,
-    weights: Vec<f64>,
-}
-
-impl<Query, Candidate, Error> Union<Query, Candidate, Error> {
-    pub fn new() -> Self {
-        Self {
-            resemblers: Vec::new(),
-            weights: Vec::new(),
-        }
-    }
-
-    pub fn add<R: Resembler<Query, Candidate, Error> + 'static>(mut self, resembler: R, weight: f64) -> Self {
-        self.resemblers.push(Arc::new(resembler));
-        self.weights.push(weight);
-        self
-    }
-}
-
-impl<Query, Candidate, Error> Resembler<Query, Candidate, Error> for Union<Query, Candidate, Error>
-where
-    Query: Clone + Debug,
-    Candidate: Clone + Debug,
-    Error: Clone + Debug,
-{
-    fn resemblance(&self, query: &Query, candidate: &Candidate) -> Result<Resemblance, Error> {
-        let mut total_contribution = 0.0;
-        let mut successful_weight = 0.0;
-
-        for (resembler, weight) in self.resemblers.iter().zip(self.weights.iter()) {
-            match resembler.resemblance(query, candidate) {
-                Ok(resemblance) => {
-                    total_contribution += resemblance.to_f64() * weight;
-                    successful_weight += weight;
-                }
-                Err(error) => {
-                    // For Union, we could choose to continue with other resemblers
-                    // or return the first error. Here we return the first error.
-                    return Err(error);
-                }
-            }
-        }
-
-        let value = if successful_weight > 0.0 { total_contribution / successful_weight } else { 0.0 };
-        let result = if value >= 1.0 {
-            Resemblance::Perfect
-        } else if value > 0.0 {
-            Resemblance::Partial(value)
-        } else {
-            Resemblance::Disparity
-        };
-
-        Ok(result)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Profile<Query, Candidate, Error> {
-    pub query: Query,
-    pub candidate: Candidate,
-    pub dimensions: Vec<Dimension<Query, Candidate, Error>>,
-    pub resemblance: Resemblance,
-}
-
-impl<Query, Candidate, Error> Profile<Query, Candidate, Error> {
-    pub fn viable(&self, floor: f64) -> bool {
-        self.resemblance.to_f64() >= floor
-    }
-
-    pub fn has_errors(&self) -> bool {
-        self.dimensions.iter().any(|d| d.error.is_some())
-    }
-
-    pub fn successful(&self) -> bool {
-        !self.has_errors()
-    }
-
-    pub fn errors(&self) -> Vec<&Error> {
-        self.dimensions.iter().filter_map(|d| d.error.as_ref()).collect()
-    }
-}
-
 pub struct Assessor<Query, Candidate, Error> {
     pub dimensions: Vec<Dimension<Query, Candidate, Error>>,
     pub floor: f64,
@@ -290,16 +117,6 @@ where
         self
     }
 
-    pub fn blend(mut self, blend: Blend<Query, Candidate, Error>, weight: f64) -> Self {
-        self.dimensions.push(Dimension::new(blend, weight));
-        self
-    }
-
-    pub fn union(mut self, union: Union<Query, Candidate, Error>, weight: f64) -> Self {
-        self.dimensions.push(Dimension::new(union, weight));
-        self
-    }
-
     pub fn clear_errors(&mut self) {
         self.errors.clear();
     }
@@ -313,92 +130,110 @@ where
     }
 }
 
+impl<Query, Candidate, Error> Resembler<Query, Candidate, Error> for Assessor<Query, Candidate, Error>
+where
+    Query: Clone + Debug,
+    Candidate: Clone + Debug,
+    Error: Clone + Debug,
+{
+    fn resemblance(&mut self, query: &Query, candidate: &Candidate) -> Result<Resemblance, Error> {
+        for dimension in &mut self.dimensions {
+            dimension.assess(query, candidate);
+
+            if let Some(ref error) = dimension.error {
+                return Err(error.clone());
+            }
+        }
+
+        let total_contribution: f64 = self.dimensions.iter().map(|d| d.contribution).sum();
+        let total_weight: f64 = self.dimensions.iter().map(|d| d.weight).sum();
+        let value = if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 };
+
+        let result = if value >= 1.0 {
+            Resemblance::Perfect
+        } else if value > 0.0 {
+            Resemblance::Partial(value)
+        } else {
+            Resemblance::Disparity
+        };
+
+        Ok(result)
+    }
+}
+
 impl<Query, Candidate, Error> Assessor<Query, Candidate, Error>
 where
     Query: Clone + Debug,
     Candidate: Clone + Debug,
     Error: Clone,
 {
-    pub fn profile(&mut self, query: &Query, candidate: &Candidate) -> Profile<Query, Candidate, Error> {
-        let mut dimensions = self.dimensions.clone();
-
-        // Clear previous errors
+    fn assess_candidate(&mut self, query: &Query, candidate: &Candidate) -> (Resemblance, bool) {
         self.errors.clear();
 
-        for dimension in &mut dimensions {
+        // Now directly mutating the dimensions on the assessor
+        for dimension in &mut self.dimensions {
             dimension.assess(query, candidate);
             if let Some(ref error) = dimension.error {
                 self.errors.push(error.clone());
             }
         }
 
-        let total_contribution: f64 = dimensions.iter().map(|d| d.contribution).sum();
-        let total_weight: f64 = dimensions.iter().map(|d| d.weight).sum();
+        let total_contribution: f64 = self.dimensions.iter().map(|d| d.contribution).sum();
+        let total_weight: f64 = self.dimensions.iter().map(|d| d.weight).sum();
         let total_resemblance = if total_weight > 0.0 { total_contribution / total_weight } else { 0.0 };
 
-        Profile {
-            query: query.clone(),
-            candidate: candidate.clone(),
-            dimensions,
-            resemblance: total_resemblance.into(),
-        }
+        let resemblance = total_resemblance.into();
+        let viable = total_resemblance >= self.floor;
+
+        (resemblance, viable)
     }
 
-    pub fn resemblance(&mut self, query: &Query, candidate: &Candidate) -> Resemblance {
-        self.profile(query, candidate).resemblance
+    pub fn dominant(&self) -> Option<&Dimension<Query, Candidate, Error>> {
+        self.dimensions.iter().max_by(|a, b| a.contribution.partial_cmp(&b.contribution).unwrap())
+    }
+
+    pub fn resemblance_value(&mut self, query: &Query, candidate: &Candidate) -> Resemblance {
+        self.assess_candidate(query, candidate).0
     }
 
     pub fn viable(&mut self, query: &Query, candidate: &Candidate) -> bool {
-        self.profile(query, candidate).viable(self.floor)
+        self.assess_candidate(query, candidate).1
     }
 
-    pub fn champion(&mut self, query: &Query, candidates: &[Candidate]) -> Option<Profile<Query, Candidate, Error>> {
-        let mut best_profile = None;
+    pub fn champion(&mut self, query: &Query, candidates: &[Candidate]) -> Option<Candidate> {
+        let mut best_candidate = None;
         let mut best_resemblance = -1.0;
 
         for candidate in candidates {
-            let profile = self.profile(query, candidate);
-            let resemblance_val = profile.resemblance.to_f64();
+            let (resemblance, viable) = self.assess_candidate(query, candidate);
+            let resemblance_val = resemblance.to_f64();
 
-            if profile.viable(self.floor) && resemblance_val > best_resemblance {
+            if viable && resemblance_val > best_resemblance {
                 best_resemblance = resemblance_val;
-                best_profile = Some(profile);
+                best_candidate = Some(candidate.clone());
             }
         }
 
-        best_profile
+        best_candidate
     }
 
-    pub fn shortlist(&mut self, query: &Query, candidates: &[Candidate]) -> Vec<Profile<Query, Candidate, Error>> {
-        let mut profiles: Vec<Profile<Query, Candidate, Error>> = Vec::new();
+    pub fn shortlist(&mut self, query: &Query, candidates: &[Candidate]) -> Vec<Candidate> {
+        let mut viable_candidates: Vec<(Candidate, f64)> = Vec::new();
 
         for candidate in candidates {
-            let profile = self.profile(query, candidate);
-            if profile.viable(self.floor) {
-                profiles.push(profile);
+            let (resemblance, viable) = self.assess_candidate(query, candidate);
+            if viable {
+                viable_candidates.push((candidate.clone(), resemblance.to_f64()));
             }
         }
 
-        profiles.sort_by(|a, b| b.resemblance.to_f64().partial_cmp(&a.resemblance.to_f64()).unwrap());
-        profiles
+        viable_candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        viable_candidates.into_iter().map(|(candidate, _)| candidate).collect()
     }
 
-    pub fn constrain(&mut self, query: &Query, candidates: &[Candidate], cap: usize) -> Vec<Profile<Query, Candidate, Error>> {
-        let mut profiles = self.shortlist(query, candidates);
-        profiles.truncate(cap);
-        profiles
-    }
-
-    pub fn all_profiles(&mut self, query: &Query, candidates: &[Candidate]) -> Vec<Profile<Query, Candidate, Error>> {
-        candidates.iter()
-            .map(|candidate| self.profile(query, candidate))
-            .collect()
-    }
-
-    pub fn error_profiles(&mut self, query: &Query, candidates: &[Candidate]) -> Vec<Profile<Query, Candidate, Error>> {
-        candidates.iter()
-            .map(|candidate| self.profile(query, candidate))
-            .filter(|profile| profile.has_errors())
-            .collect()
+    pub fn constrain(&mut self, query: &Query, candidates: &[Candidate], cap: usize) -> Vec<Candidate> {
+        let mut shortlisted = self.shortlist(query, candidates);
+        shortlisted.truncate(cap);
+        shortlisted
     }
 }

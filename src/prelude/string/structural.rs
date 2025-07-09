@@ -3,11 +3,11 @@ use crate::{
 };
 
 /// Prefix matching
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Prefix;
 
 impl Resembler<String, String, ()> for Prefix {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -22,11 +22,11 @@ impl Resembler<String, String, ()> for Prefix {
 }
 
 /// Suffix matching
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Suffix;
 
 impl Resembler<String, String, ()> for Suffix {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -41,11 +41,11 @@ impl Resembler<String, String, ()> for Suffix {
 }
 
 /// Substring matching
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Contains;
 
 impl Resembler<String, String, ()> for Contains {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
@@ -60,18 +60,18 @@ impl Resembler<String, String, ()> for Contains {
 }
 
 /// N-gram overlap
-#[derive(Debug, PartialEq)]
-pub struct NGram {
+#[derive(PartialEq)]
+pub struct Sequential {
     size: usize,
 }
 
-impl Default for NGram {
+impl Default for Sequential {
     fn default() -> Self {
         Self { size: 2 }
     }
 }
 
-impl NGram {
+impl Sequential {
     pub fn new(size: usize) -> Self {
         Self { size }
     }
@@ -86,8 +86,8 @@ impl NGram {
     }
 }
 
-impl Resembler<String, String, ()> for NGram {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+impl Resembler<String, String, ()> for Sequential {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }

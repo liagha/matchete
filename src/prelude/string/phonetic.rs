@@ -1,11 +1,11 @@
 use crate::assessor::{Resembler, Resemblance};
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Phonetic {
     mode: PhoneticMode,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum PhoneticMode {
     Soundex,
     DoubleMetaphone,
@@ -56,7 +56,7 @@ impl Phonetic {
 }
 
 impl Resembler<String, String, ()> for Phonetic {
-    fn resemblance(&self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
+    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
         if query == candidate {
             return Ok(Resemblance::Perfect);
         }
