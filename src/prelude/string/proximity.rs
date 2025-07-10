@@ -6,7 +6,6 @@ use {
     }
 };
 use core::cmp::{max, min};
-use crate::prelude::string::Tokens;
 
 /// Keyboard proximity matching
 #[derive(PartialEq)]
@@ -64,68 +63,6 @@ impl Resembler<String, String, ()> for Keyboard {
         let length_similarity = 1.0 - ((query_chars.len() as isize - candidate_chars.len() as isize).abs() as f64 / max(query_chars.len(), candidate_chars.len()) as f64);
         let base_score = 1.0 - (distance as f64 / max(query_chars.len(), candidate_chars.len()) as f64);
         let score = base_score * (1.0 + 0.3 * keyboard_factor) * length_similarity;
-
-        let result = if score >= 1.0 {
-            Resemblance::Perfect
-        } else if score > 0.0 {
-            Resemblance::Partial(score)
-        } else {
-            Resemblance::Disparity
-        };
-
-        Ok(result)
-    }
-}
-
-/// Fuzzy search with multiple strategies
-#[derive(PartialEq)]
-pub struct Fuzzy {
-    token_scorer: Tokens,
-    min_score: f64,
-}
-
-impl Default for Fuzzy {
-    fn default() -> Self {
-        Self {
-            token_scorer: Tokens::default(),
-            min_score: 0.7,
-        }
-    }
-}
-
-impl Resembler<String, String, ()> for Fuzzy {
-    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
-        if query == candidate {
-            return Ok(Resemblance::Perfect);
-        }
-
-        let query_tokens = self.token_scorer.tokenize(&query.to_lowercase());
-        let candidate_tokens = self.token_scorer.tokenize(&candidate.to_lowercase());
-
-        if query_tokens.is_empty() || candidate_tokens.is_empty() {
-            return Ok(Resemblance::Disparity);
-        }
-
-        let mut matched_tokens = 0;
-        let mut total_score = 0.0;
-
-        for q_token in &query_tokens {
-            let mut best_score = 0.0;
-            for c_token in &candidate_tokens {
-                let edit_score = 1.0 - (edit_distance(q_token, c_token) as f64 / max(q_token.len(), c_token.len()) as f64);
-                best_score = f64::max(best_score, edit_score);
-                if c_token.contains(q_token) {
-                    let contain_score = q_token.len() as f64 / c_token.len() as f64 * 0.9;
-                    best_score = best_score.max(contain_score);
-                }
-            }
-            total_score += best_score;
-            if best_score >= self.min_score { matched_tokens += 1; }
-        }
-
-        let coverage = matched_tokens as f64 / query_tokens.len() as f64;
-        let avg_score = total_score / query_tokens.len() as f64;
-        let score = coverage * avg_score * (0.7 + 0.3 * coverage);
 
         let result = if score >= 1.0 {
             Resemblance::Perfect

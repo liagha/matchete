@@ -4,7 +4,6 @@ use {
 
     crate::{
         assessor::{Resembler, Resemblance},
-        prelude::string::utils::edit_distance,
     }
 };
 
@@ -167,32 +166,6 @@ impl Resembler<String, String, ()> for Cosine {
         }
 
         let score = self.compute_resemblance(query, candidate);
-        let result = if score >= 1.0 {
-            Resemblance::Perfect
-        } else if score > 0.0 {
-            Resemblance::Partial(score)
-        } else {
-            Resemblance::Disparity
-        };
-
-        Ok(result)
-    }
-}
-
-/// Edit distance matcher
-#[derive(PartialEq)]
-pub struct Levenshtein;
-
-impl Resembler<String, String, ()> for Levenshtein {
-    fn resemblance(&mut self, query: &String, candidate: &String) -> Result<Resemblance, ()> {
-        if query == candidate {
-            return Ok(Resemblance::Perfect);
-        }
-
-        let distance = edit_distance(query, candidate);
-        let max_len = max(query.len(), candidate.len());
-        let score = if max_len == 0 { 1.0 } else { 1.0 - (distance as f64 / max_len as f64) };
-
         let result = if score >= 1.0 {
             Resemblance::Perfect
         } else if score > 0.0 {

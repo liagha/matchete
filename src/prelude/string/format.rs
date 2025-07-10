@@ -27,7 +27,7 @@ impl Debug for Exact {
 
 impl Debug for Relaxed {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "a case-insensitive match")
+        write!(f, "are case-insensitive match")
     }
 }
 
@@ -49,33 +49,9 @@ impl Debug for Contains {
     }
 }
 
-impl Debug for Levenshtein {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "are spelled similarly")
-    }
-}
-
-impl Debug for Tokens {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "share similar word parts")
-    }
-}
-
-impl Debug for Initials {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "match by initials")
-    }
-}
-
 impl Debug for Keyboard {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "are typed close on the keyboard")
-    }
-}
-
-impl Debug for Fuzzy {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "are a fuzzy match")
     }
 }
 
