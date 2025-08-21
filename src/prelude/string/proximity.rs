@@ -62,7 +62,7 @@ impl Resembler<String, String, ()> for Keyboard {
         let keyboard_factor = adjacent_count as f64 / differing_chars as f64;
         let length_similarity = 1.0 - ((query_chars.len() as isize - candidate_chars.len() as isize).abs() as f64 / max(query_chars.len(), candidate_chars.len()) as f64);
         let base_score = 1.0 - (distance as f64 / max(query_chars.len(), candidate_chars.len()) as f64);
-        let score = base_score * (1.0 + 0.3 * keyboard_factor) * length_similarity;
+        let score = base_score * (1.0 + 0.5 * keyboard_factor) * length_similarity; // Boosted keyboard_factor for better typo detection
 
         let result = if score >= 1.0 {
             Resemblance::Perfect

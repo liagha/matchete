@@ -53,6 +53,17 @@ impl Phonetic {
         }
         result
     }
+
+    fn compute_double_metaphone(&self, text: &str) -> (String, String) {
+        let primary = self.compute_soundex(text);
+        // Simple approximation for secondary code: swap common alternates like th/d, ph/f, ck/k, etc.
+        let mut secondary_text = text.to_lowercase().replace("th", "d").replace("ph", "f").replace("ck", "k").replace("gn", "n").replace("wr", "r");
+        if secondary_text == text.to_lowercase() {
+            secondary_text = text.to_lowercase().replace("s", "z").replace("c", "k"); // Fallback for some variations
+        }
+        let secondary = self.compute_soundex(&secondary_text);
+        (primary, secondary)
+    }
 }
 
 impl Resembler<String, String, ()> for Phonetic {
@@ -79,15 +90,20 @@ impl Resembler<String, String, ()> for Phonetic {
                 }
             }
             PhoneticMode::DoubleMetaphone => {
-                if query.to_lowercase() == candidate.to_lowercase() {
-                    return Ok(Resemblance::Perfect);
-                }
-                let query_code = self.compute_soundex(query);
-                let candidate_code = self.compute_soundex(candidate);
-                if query_code == candidate_code {
-                    Resemblance::Partial(0.8)
+                let (query_primary, query_secondary) = self.compute_double_metaphone(query);
+                let (candidate_primary, candidate_secondary) = self.compute_double_metaphone(candidate);
+                if query_primary == candidate_primary || query_primary == candidate_secondary ||
+                    query_secondary == candidate_primary || query_secondary == candidate_secondary {
+                    Resemblance::Partial(0.9)
                 } else {
-                    Resemblance::Disparity
+                    let common_prefix_len = query_primary.chars().zip(candidate_primary.chars())
+                        .take_while(|(c1, c2)| c1 == c2)
+                        .count();
+                    if common_prefix_len > 0 {
+                        Resemblance::Partial(0.7 * (common_prefix_len as f64 / 4.0))
+                    } else {
+                        Resemblance::Disparity
+                    }
                 }
             }
         };

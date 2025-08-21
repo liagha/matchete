@@ -1,7 +1,6 @@
 use {
     crate::{
         assessor::{Resembler, Resemblance},
-        prelude::string::utils::edit_distance,
     },
     core::cmp::max,
     hashish::{HashSet},
@@ -95,7 +94,7 @@ impl Words {
             for (j, c_word) in candidate_words.iter().enumerate() {
                 if q_word == c_word {
                     let position_factor = 1.0 - (i as f64 - j as f64).abs() / max(query_words.len(), candidate_words.len()) as f64;
-                    common_weight += 0.5 + 0.5 * position_factor;
+                    common_weight += 0.4 + 0.6 * position_factor; // Boosted position influence for better ordering sensitivity
                     break;
                 }
             }
